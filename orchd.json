@@ -1,0 +1,96 @@
+{
+  "name": "fullstack-supabase",
+  "backup_exclude": [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".expo",
+    ".next",
+    ".cache",
+    "ios",
+    "android",
+    ".metro-tmp"
+  ],
+  "workloads": [
+    {
+      "name": "db",
+      "kind": "tinbase"
+    },
+    {
+      "name": "api",
+      "kind": "node",
+      "dir": "api",
+      "install": [
+        "bun",
+        "install"
+      ],
+      "run": [
+        "sh",
+        "-lc",
+        "H=$(md5sum package.json | cut -d\" \" -f1); S=node_modules/.pkg-hash; if [ \"$(cat $S 2>/dev/null)\" != \"$H\" ]; then echo \"[boot] package.json changed - bun install\"; (bun install || bun install) && echo \"$H\" > $S || echo \"[boot] bun install failed twice; starting with baked node_modules\"; fi; exec node --watch index.js"
+      ],
+      "start": [
+        "sh",
+        "-lc",
+        "H=$(md5sum package.json | cut -d\" \" -f1); S=node_modules/.pkg-hash; if [ \"$(cat $S 2>/dev/null)\" != \"$H\" ]; then echo \"[boot] package.json changed - bun install\"; (bun install || bun install) && echo \"$H\" > $S || echo \"[boot] bun install failed twice; starting with baked node_modules\"; fi; exec node index.js"
+      ],
+      "port_env": "PORT",
+      "image": "rn-api:dev",
+      "env": {
+        "SUPABASE_URL": "${route.db}",
+        "SUPABASE_SERVICE_ROLE_KEY": "${workload.db.service_key}"
+      },
+      "build": [
+        [
+          "sh",
+          "-lc",
+          "md5sum package.json | cut -d\" \" -f1 > node_modules/.pkg-hash"
+        ]
+      ],
+      "setup": [
+        [
+          "sh",
+          "-lc",
+          "npm install -g bun@1.2.21 >/dev/null"
+        ]
+      ]
+    },
+    {
+      "name": "web",
+      "kind": "static",
+      "dir": "web",
+      "image": "rn-web:dev"
+    },
+    {
+      "name": "mobile",
+      "kind": "node",
+      "dir": "mobile",
+      "run": [
+        "rnrun",
+        "start",
+        "--port",
+        "$PORT"
+      ],
+      "start": [
+        "rnrun",
+        "start",
+        "--port",
+        "$PORT",
+        "--production"
+      ],
+      "image": "rn-run:dev",
+      "port": 8080,
+      "memory_mb": 1024,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "${route.api}",
+        "EXPO_PUBLIC_SUPABASE_URL": "${route.db}",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${workload.db.anon_key}",
+        "EXPO_PUBLIC_RAPIDNATIVE_MODE": "staging",
+        "EXPO_DEV_SERVER_ORIGIN": "${route.mobile}",
+        "EXPO_PACKAGER_PROXY_URL": "${route.mobile}"
+      },
+      "primary": true
+    }
+  ]
+}

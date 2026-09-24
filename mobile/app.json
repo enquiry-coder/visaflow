@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "VisaFlow",
+    "slug": "visaflow",
+    "scheme": "visaflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/image.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.visaflow.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#12667a"
+      },
+      "package": "com.visaflow.app"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/image.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "extra": {
+      "defaultAppIconSet": true,
+      "selectedIconUrl": "https://sqgedrruthtbkskkjeqa.supabase.co/storage/v1/object/public/projects/7e62d1e6-1b68-41f6-9144-02916a4f261f/fs/assets/images/icon.png?t=1790067907823",
+      "selectedIconId": "73d6ceed-8be3-43dc-af2b-898a9943a30f"
+    }
+  }
+}

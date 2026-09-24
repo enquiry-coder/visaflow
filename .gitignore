@@ -1,0 +1,6 @@
+node_modules/
+.expo/
+.tinbase/
+
+# local env — keep real keys out of git
+.env
