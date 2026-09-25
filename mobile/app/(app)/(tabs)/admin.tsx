@@ -19,6 +19,7 @@ import {
   BanIcon,
   RotateCcwIcon,
   MailCheckIcon,
+  LogOutIcon,
 } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useAuth, useTheme } from '@/src/hooks';
@@ -29,6 +30,7 @@ cssInterop(CheckCircle2Icon, { className: { target: 'style', nativeStyleToProp: 
 cssInterop(BanIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(RotateCcwIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(MailCheckIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(LogOutIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -64,7 +66,7 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 }
 
 export default function AdminScreen() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
 
@@ -174,6 +176,20 @@ export default function AdminScreen() {
               <Text className="text-[11px] font-medium text-muted-foreground">Active</Text>
             </View>
           </View>
+
+          {/* Sign out */}
+          <Pressable
+            onPress={() => signOut.mutate()}
+            disabled={signOut.isPending}
+            className="mt-4 flex-row items-center justify-center gap-2 self-end rounded-xl border border-border px-4 py-2.5 active:opacity-70"
+          >
+            {signOut.isPending ? (
+              <ActivityIndicator size="small" color={isDark ? '#8d9d9e' : '#70797a'} />
+            ) : (
+              <LogOutIcon className="text-muted-foreground" size={16} />
+            )}
+            <Text className="text-sm font-semibold text-muted-foreground">Sign out</Text>
+          </Pressable>
 
           {/* Create user form */}
           <View className="mt-6 rounded-3xl bg-card border border-border p-5">
