@@ -43,6 +43,9 @@ export function useAuth() {
   const user: User | null = session?.user
     ? { id: session.user.id, email: session.user.email ?? '' }
     : null;
+  // Role from user_metadata (staff | supervisor | admin). Default staff.
+  const userRole: string = (session?.user?.user_metadata?.role as string) || 'staff';
+  const userFullName: string = (session?.user?.user_metadata?.full_name as string) || '';
 
   const signIn = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
@@ -91,6 +94,8 @@ export function useAuth() {
     session,
     isAuthenticated: !!session,
     isLoading: sessionQuery.isLoading,
+    userRole,
+    userFullName,
     signIn,
     signUp,
     signOut,

@@ -41,6 +41,7 @@ export interface Database {
           passport_clarity: string | null;
           address_clarity: string | null;
           docs_verified_at: string | null;
+          staff_user_id: string | null;
         };
         Insert: {
           id: string;
@@ -72,6 +73,7 @@ export interface Database {
           passport_clarity?: string | null;
           address_clarity?: string | null;
           docs_verified_at?: string | null;
+          staff_user_id?: string | null;
         };
         Update: {
           id?: string;
@@ -103,6 +105,7 @@ export interface Database {
           passport_clarity?: string | null;
           address_clarity?: string | null;
           docs_verified_at?: string | null;
+          staff_user_id?: string | null;
         };
       };
     };

@@ -29,7 +29,7 @@ const EMPTY_ROW: Row = { salutation: '', first_name: '', last_name: '', country_
 
 export default function ImportScreen() {
   const { client } = useApp();
-  const { user } = useAuth();
+  const { user, userRole, userFullName } = useAuth();
   const queryClient = useQueryClient();
   const [rows, setRows] = useState<Row[]>([{ ...EMPTY_ROW }]);
   const [pasteText, setPasteText] = useState('');
@@ -82,6 +82,11 @@ export default function ImportScreen() {
       // Collision-safe: existing seed rows already occupy REG-2026-0001..0004,
       // so derive a unique suffix from the current timestamp instead of a sequential index.
       const stamp = Date.now().toString(36).toUpperCase();
+      // A staff member works their own cases: stamp their id so the pipeline
+      // filter (staff sees own only) shows these immediately. Supervisors/admins
+      // keep staff_user_id null until the case is explicitly assigned.
+      const ownId = userRole === 'staff' ? user?.id ?? null : null;
+      const ownName = userRole === 'staff' && userFullName ? userFullName : '';
       const inserts = rows
         .filter((r) => r.first_name.trim() && r.last_name.trim())
         .map((r) => ({
@@ -94,7 +99,8 @@ export default function ImportScreen() {
           country_code: r.country_code,
           phone_number: r.phone.trim() || '',
           nationality: r.nationality.trim() || null,
-          handling_staff: r.handling_staff.trim() || 'Unassigned',
+          handling_staff: ownName || r.handling_staff.trim() || 'Unassigned',
+          staff_user_id: ownId,
           status: 'awaiting_input',
           follow_up_due: false,
         }));

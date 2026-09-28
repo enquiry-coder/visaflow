@@ -1,9 +1,12 @@
 -- Demo preview user — must exist before the owner-scoped rows below FK auth.users(id).
 -- password: rapidnative-demo (editor preview only — real GoTrue cannot verify this hash)
-insert into auth.users (id, email, encrypted_password, email_confirmed_at)
-values ('00000000-0000-0000-0000-000000000001', 'demo@rapidnative.com', 'pbkdf2$100000$52617069644e61746976652044656d6f$ebd41bf86ab4f47040854a1e4968e2fdc414e15db6a4397f3271e1b1d56b2061', now())
+-- role "admin" so the preview (always signed in as this user) sees ALL seeded
+-- clients and the management screen, matching the live supervisor/admin view.
+insert into auth.users (id, email, raw_user_meta_data, encrypted_password, email_confirmed_at)
+values ('00000000-0000-0000-0000-000000000001', 'demo@rapidnative.com', '{"role":"admin","full_name":"Demo Admin"}', 'pbkdf2$100000$52617069644e61746976652044656d6f$ebd41bf86ab4f47040854a1e4968e2fdc414e15db6a4397f3271e1b1d56b2061', now())
 on conflict (id) do update
   set email = excluded.email,
+      raw_user_meta_data = excluded.raw_user_meta_data,
       encrypted_password = excluded.encrypted_password,
       email_confirmed_at = excluded.email_confirmed_at;
 

@@ -47,17 +47,22 @@ function getPortalBase(): string {
 
 export default function PipelineScreen() {
   const { client } = useApp();
-  const { user, signOut } = useAuth();
+  const { user, userRole, signOut } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  // staff see only their own clients; supervisor/admin see everything.
+  const canSeeAll = userRole !== 'staff';
+
   const { data: clients, isLoading, refetch } = useQuery({
-    queryKey: ['clients', user?.id ?? 'none'],
+    queryKey: ['clients', user?.id ?? 'none', userRole],
     queryFn: async () => {
-      const { data, error } = await client.from('clients').select('*').order('created_at', { ascending: false }).limit(200);
+      let q = client.from('clients').select('*').order('created_at', { ascending: false }).limit(500);
+      if (!canSeeAll && user?.id) q = q.eq('staff_user_id', user.id);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -224,7 +229,9 @@ export default function PipelineScreen() {
               <Text className="mt-3 text-xs font-semibold tracking-wide" style={{ color: '#6b7a2b' }}>via Probiz InsureProofID</Text>
               <Text className="mt-1 text-xs font-semibold tracking-widest text-primary uppercase">Onboarding Pipeline</Text>
               <Text className="mt-1 text-3xl font-bold tracking-tight text-foreground">Client Intake</Text>
-              <Text className="mt-1 text-sm text-muted-foreground">{clients?.length ?? 0} records in the lifecycle</Text>
+              <Text className="mt-1 text-sm text-muted-foreground">
+                {canSeeAll ? `${clients?.length ?? 0} records in the lifecycle` : `${clients?.length ?? 0} of your assigned cases`}
+              </Text>
             </View>
             <Pressable
               onPress={() =>

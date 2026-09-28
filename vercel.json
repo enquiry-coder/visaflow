@@ -8,10 +8,15 @@
     }
   },
   "rewrites": [
+    { "source": "/admin/clients/:path*", "destination": "/api/vercel" },
     { "source": "/admin/users/:id", "destination": "/api/vercel" },
     { "source": "/admin/users", "destination": "/api/vercel" },
     { "source": "/api/vercel", "destination": "/api/vercel" },
     { "source": "/api/health", "destination": "/api/vercel" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/admin/clients/(.*)", "headers": [{ "key": "x-original-path", "value": "/admin/clients/$1" }] },
+    { "source": "/admin/users(?:/(.*))?", "headers": [{ "key": "x-original-path", "value": "/admin/users/$1" }] }
   ]
 }
