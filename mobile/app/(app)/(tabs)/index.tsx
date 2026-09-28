@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { MessageCircleIcon, ChevronRightIcon, CameraIcon, FileTextIcon, CalendarClockIcon, DownloadIcon, PauseCircleIcon, PlayCircleIcon } from 'lucide-react-native';
+import { MessageCircleIcon, ChevronRightIcon, CameraIcon, FileTextIcon, CalendarClockIcon, DownloadIcon, PauseCircleIcon, PlayCircleIcon, LogOutIcon } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useApp, useAuth } from '@/src/hooks';
 import { downloadCsv, docRef } from '@/src/lib/export';
@@ -26,6 +26,7 @@ cssInterop(CalendarClockIcon, { className: { target: 'style', nativeStyleToProp:
 cssInterop(DownloadIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(PauseCircleIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(PlayCircleIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(LogOutIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 const STAGES = [
   { key: 'not_processed', label: 'Not Processed', hint: 'No invitation sent yet' },
@@ -46,7 +47,7 @@ function getPortalBase(): string {
 
 export default function PipelineScreen() {
   const { client } = useApp();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -217,11 +218,31 @@ export default function PipelineScreen() {
       >
         {/* Header */}
         <View className="px-5 pt-5 pb-4">
-          <Image source={require('../../../assets/image.png')} style={{ width: 170, height: 51 }} resizeMode="contain" />
-          <Text className="mt-3 text-xs font-semibold tracking-wide" style={{ color: '#6b7a2b' }}>via Probiz InsureProofID</Text>
-          <Text className="mt-1 text-xs font-semibold tracking-widest text-primary uppercase">Onboarding Pipeline</Text>
-          <Text className="mt-1 text-3xl font-bold tracking-tight text-foreground">Client Intake</Text>
-          <Text className="mt-1 text-sm text-muted-foreground">{clients?.length ?? 0} records in the lifecycle</Text>
+          <View className="flex-row items-start justify-between">
+            <View className="flex-1 min-w-0">
+              <Image source={require('../../../assets/image.png')} style={{ width: 170, height: 51 }} resizeMode="contain" />
+              <Text className="mt-3 text-xs font-semibold tracking-wide" style={{ color: '#6b7a2b' }}>via Probiz InsureProofID</Text>
+              <Text className="mt-1 text-xs font-semibold tracking-widest text-primary uppercase">Onboarding Pipeline</Text>
+              <Text className="mt-1 text-3xl font-bold tracking-tight text-foreground">Client Intake</Text>
+              <Text className="mt-1 text-sm text-muted-foreground">{clients?.length ?? 0} records in the lifecycle</Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                signOut.mutate(undefined, {
+                  onSuccess: () => router.replace('/(auth)/login'),
+                })
+              }
+              disabled={signOut.isPending}
+              className="ml-3 flex-row items-center gap-1.5 rounded-xl border border-border px-3 py-2 active:opacity-70"
+            >
+              {signOut.isPending ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <LogOutIcon className="text-muted-foreground" size={16} />
+              )}
+              <Text className="text-xs font-semibold text-muted-foreground">Sign out</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Hero metric */}

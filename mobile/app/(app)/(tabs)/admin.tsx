@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useAuth, useTheme } from '@/src/hooks';
+import { router } from 'expo-router';
 
 cssInterop(ShieldUserIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(UserPlusIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -33,6 +34,7 @@ cssInterop(MailCheckIcon, { className: { target: 'style', nativeStyleToProp: { c
 cssInterop(LogOutIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_KEY ?? '';
 
 interface AdminUser {
   id: string;
@@ -48,11 +50,17 @@ function isBanned(u: AdminUser): boolean {
   return new Date(u.banned_until).getTime() > Date.now();
 }
 
-async function adminRequest(path: string, options: RequestInit = {}) {
+async function adminRequest(path: string, options: RequestInit & { token?: string | null } = {}) {
   if (!API_URL) throw new Error('EXPO_PUBLIC_API_URL is not set — the admin API is unavailable.');
+  const { token, ...rest } = options;
   const resp = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...rest,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ADMIN_KEY ? { 'x-admin-key': ADMIN_KEY } : {}),
+      ...(token ? { 'x-supabase-token': token } : {}),
+      ...(rest.headers || {}),
+    },
   });
   if (!resp.ok) {
     let msg = `Request failed (${resp.status})`;
@@ -66,7 +74,8 @@ async function adminRequest(path: string, options: RequestInit = {}) {
 }
 
 export default function AdminScreen() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
+  const token = session?.access_token ?? null;
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
 
@@ -86,13 +95,13 @@ export default function AdminScreen() {
 
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
-    queryFn: () => adminRequest('/admin/users'),
+    queryFn: () => adminRequest('/admin/users', { token }),
     enabled: isAdmin,
   });
 
   const createUser = useMutation({
     mutationFn: (payload: { email: string; password: string; name: string; role: string }) =>
-      adminRequest('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
+      adminRequest('/admin/users', { method: 'POST', body: JSON.stringify(payload), token }),
     onSuccess: () => {
       setNotice(`User ${email.trim()} created and email confirmed.`);
       setEmail('');
@@ -108,6 +117,7 @@ export default function AdminScreen() {
       adminRequest(`/admin/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ ban_duration: banned ? '876600h' : null }),
+        token,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: (e: Error) => setError(e.message),
@@ -138,6 +148,22 @@ export default function AdminScreen() {
               <Text className="font-semibold text-foreground">{user?.email || 'a guest'}</Text>. Ask your
               administrator to add your email to the allow-list before you can manage staff users.
             </Text>
+            <Pressable
+              onPress={() =>
+                signOut.mutate(undefined, {
+                  onSuccess: () => router.replace('/(auth)/login'),
+                })
+              }
+              disabled={signOut.isPending}
+              className="mt-3 flex-row items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 active:opacity-70"
+            >
+              {signOut.isPending ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <LogOutIcon className="text-muted-foreground" size={16} />
+              )}
+              <Text className="text-sm font-semibold text-muted-foreground">Sign out</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -179,7 +205,11 @@ export default function AdminScreen() {
 
           {/* Sign out */}
           <Pressable
-            onPress={() => signOut.mutate()}
+            onPress={() =>
+              signOut.mutate(undefined, {
+                onSuccess: () => router.replace('/(auth)/login'),
+              })
+            }
             disabled={signOut.isPending}
             className="mt-4 flex-row items-center justify-center gap-2 self-end rounded-xl border border-border px-4 py-2.5 active:opacity-70"
           >

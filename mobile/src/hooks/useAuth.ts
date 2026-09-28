@@ -54,8 +54,12 @@ export function useAuth() {
   });
 
   const signUp = useMutation({
-    mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const { data, error } = await client.auth.signUp({ email, password });
+    mutationFn: async ({ email, password, redirectTo }: { email: string; password: string; redirectTo?: string }) => {
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      });
       if (error) throw new AuthError(error.message, error.reason);
       return data;
     },
@@ -73,6 +77,15 @@ export function useAuth() {
     },
   });
 
+  const resendConfirmation = useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      // 200 whether or not the account exists / is confirmed — by design, so we never
+      // claim to know either way. Just report "sent".
+      const { error } = await client.auth.resend({ type: 'signup', email });
+      if (error) throw new AuthError(error.message, error.reason);
+    },
+  });
+
   return {
     user,
     session,
@@ -81,5 +94,6 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
+    resendConfirmation,
   };
 }

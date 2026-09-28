@@ -15,13 +15,16 @@ import { router } from 'expo-router';
 import { useAuth } from '@/src/hooks';
 
 export default function LoginScreen() {
-  const { signIn, user } = useAuth();
+  const { signIn, user, resendConfirmation } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const onSubmit = () => {
     setError(null);
+    setNotice(null);
     signIn.mutate(
       { email: email.trim(), password },
       {
@@ -30,6 +33,36 @@ export default function LoginScreen() {
           if ((process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE !== 'designer' && process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE !== 'staging') && user) {
             router.replace('/(app)');
           }
+        },
+      }
+    );
+  };
+
+  const onResend = () => {
+    if (resendCooldown > 0) return;
+    if (!email.trim()) return setError('Enter your email address first.');
+    setError(null);
+    setNotice(null);
+    resendConfirmation.mutate(
+      { email: email.trim() },
+      {
+        onError: (e: any) => {
+          if (e?.message?.includes('rate') || e?.reason?.includes('rate')) {
+            setNotice('You asked a moment ago — the first email is still on its way.');
+          } else {
+            setError(e?.message ?? 'Could not resend. Try again shortly.');
+          }
+        },
+        onSuccess: () => {
+          setNotice(`Confirmation email re-sent to ${email.trim()}. Check your inbox.`);
+          setResendCooldown(60);
+          const t = setInterval(() => {
+            setResendCooldown((n) => {
+              const next = n - 1;
+              if (next <= 0) clearInterval(t);
+              return next <= 0 ? 0 : next;
+            });
+          }, 1000);
         },
       }
     );
@@ -47,6 +80,11 @@ export default function LoginScreen() {
           {error && (
             <View className="mt-4 rounded-xl bg-destructive/10 p-3">
               <Text className="text-sm text-destructive">{error}</Text>
+            </View>
+          )}
+          {notice && (
+            <View className="mt-4 rounded-xl bg-primary/10 p-3">
+              <Text className="text-sm text-primary">{notice}</Text>
             </View>
           )}
 
@@ -80,6 +118,20 @@ export default function LoginScreen() {
             ) : (
               <Text className="text-base font-semibold text-primary-foreground">Sign in</Text>
             )}
+          </Pressable>
+
+          <Pressable
+            onPress={onResend}
+            disabled={resendCooldown > 0 || resendConfirmation.isPending}
+            className="mt-1 items-center py-2"
+          >
+            <Text className="text-sm text-muted-foreground">
+              {resendCooldown > 0
+                ? `Resend available in ${resendCooldown}s`
+                : resendConfirmation.isPending
+                ? 'Sending…'
+                : "Didn't get the confirmation email? Resend it"}
+            </Text>
           </Pressable>
 
           <Pressable onPress={() => router.push('/(auth)/signup')} className="mt-4 items-center py-2">

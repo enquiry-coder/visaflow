@@ -40,11 +40,53 @@ function supabaseAdminFetch(path, options = {}) {
   });
 }
 
-// A simple gate: require an `x-admin-key` header matching ADMIN_KEY when set.
-function requireAdmin(req, res, next) {
-  const key = process.env.ADMIN_KEY;
-  if (!key) return next(); // no key configured -> open (trusted internal network)
-  if ((req.get("x-admin-key") || "") === key) return next();
+// Admin authorization: validate the caller is an allowed admin so a staff
+// user can never create/disable accounts. Two independent checks, either passes:
+//   1) A valid Supabase session JWT (`x-supabase-token`) whose email is in
+//      ADMIN_EMAILS — the proper per-user check.
+//   2) The shared `x-admin-key` header matching ADMIN_KEY — a fallback for
+//      server tooling/scripts (also requires ADMIN_KEY to be configured).
+// Fail closed: unset config or no valid credentials => 401/503.
+const ADMIN_EMAILS = (
+  process.env.ADMIN_EMAILS ||
+  process.env.EXPO_PUBLIC_ADMIN_EMAILS ||
+  ""
+)
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+async function requireAdmin(req, res, next) {
+  const adminKey = process.env.ADMIN_KEY;
+  const headerKey = req.get("x-admin-key") || "";
+
+  // Check 1: shared key (must be configured to use this path — fail closed)
+  if (!adminKey) {
+    return res.status(503).json({ error: "ADMIN_KEY is not configured on the API." });
+  }
+  if (headerKey === adminKey) return next();
+
+  // Check 2: caller's Supabase session JWT belongs to an allowed admin email.
+  // `/auth/v1/user` expects the anon key as `apikey` and the user's JWT as
+  // `Authorization` (the service-role key would override the user identity).
+  const token = req.get("x-supabase-token") || "";
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (token && ADMIN_EMAILS.length > 0 && SUPABASE_URL && anonKey) {
+    try {
+      const url = `${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/user`;
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const email = (data?.email || "").toLowerCase();
+        if (ADMIN_EMAILS.includes(email)) return next();
+      }
+    } catch (_) {
+      // fall through to reject
+    }
+  }
+
   return res.status(401).json({ error: "Not authorized" });
 }
 

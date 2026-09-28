@@ -13,13 +13,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/hooks';
 
+// The confirmation link in Supabase's email is built from `emailRedirectTo` (if set) or the
+// dashboard Site URL. Point it explicitly at the deployed site so the link never resolves to
+// "localhost" — the most common support bug when Site URL is left at its default.
+function getWebOrigin(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return process.env.EXPO_PUBLIC_WEB_URL ?? 'https://visaflow-nine.vercel.app';
+}
+
 export default function SignupScreen() {
-  const { signUp } = useAuth();
+  const { signUp, resendConfirmation } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const onSubmit = () => {
     setError(null);
@@ -30,15 +41,45 @@ export default function SignupScreen() {
     if (password !== confirm) return setError('Passwords do not match.');
 
     signUp.mutate(
-      { email: email.trim(), password },
+      { email: email.trim(), password, redirectTo: `${getWebOrigin()}/login` },
       {
         onError: (e: any) => setError(e?.message ?? 'Sign up failed. Try again.'),
-        onSuccess: () => {
-          // Supabase may require email confirmation before the session is usable.
-          // Show a clear next-step instead of a silent dead end.
+        onSuccess: (data: any) => {
+          // Confirmations ON: signUp returns a user but no session → wait for the link.
+          // Confirmations OFF: it returns a session → the auth gate takes over.
+          if (data?.session) return;
           setNotice(
-            'Account created. Check your inbox to confirm your email, then sign in here.'
+            `A confirmation email was sent to ${email.trim()}. Check your inbox (and spam) to confirm, then sign in here.`
           );
+        },
+      }
+    );
+  };
+
+  const onResend = () => {
+    if (resendCooldown > 0) return;
+    setError(null);
+    setNotice(null);
+    resendConfirmation.mutate(
+      { email: email.trim() },
+      {
+        onError: (e: any) => {
+          if (e?.message?.includes('rate') || e?.reason?.includes('rate')) {
+            setNotice('You asked a moment ago — the first email is still on its way.');
+          } else {
+            setError(e?.message ?? 'Could not resend. Try again shortly.');
+          }
+        },
+        onSuccess: () => {
+          setNotice(`Confirmation email re-sent to ${email.trim()}. Check your inbox.`);
+          setResendCooldown(60);
+          const t = setInterval(() => {
+            setResendCooldown((n) => {
+              const next = n - 1;
+              if (next <= 0) clearInterval(t);
+              return next <= 0 ? 0 : next;
+            });
+          }, 1000);
         },
       }
     );
@@ -104,6 +145,22 @@ export default function SignupScreen() {
               <Text className="text-base font-semibold text-primary-foreground">Create account</Text>
             )}
           </Pressable>
+
+          {notice && (
+            <Pressable
+              onPress={onResend}
+              disabled={resendCooldown > 0 || resendConfirmation.isPending}
+              className="mt-3 items-center py-2"
+            >
+              <Text className="text-sm text-muted-foreground">
+                {resendCooldown > 0
+                  ? `Resend available in ${resendCooldown}s`
+                  : resendConfirmation.isPending
+                  ? 'Sending…'
+                  : 'Resend confirmation email'}
+              </Text>
+            </Pressable>
+          )}
 
           <Pressable onPress={() => router.push('/(auth)/login')} className="mt-4 items-center py-2">
             <Text className="text-sm text-muted-foreground">
