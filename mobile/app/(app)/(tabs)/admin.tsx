@@ -20,9 +20,10 @@ import {
   RotateCcwIcon,
   MailCheckIcon,
   LogOutIcon,
+  ArrowRightLeftIcon,
 } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
-import { useAuth, useTheme } from '@/src/hooks';
+import { useApp, useAuth, useTheme } from '@/src/hooks';
 import { router } from 'expo-router';
 
 cssInterop(ShieldUserIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -32,6 +33,7 @@ cssInterop(BanIcon, { className: { target: 'style', nativeStyleToProp: { color: 
 cssInterop(RotateCcwIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(MailCheckIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(LogOutIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(ArrowRightLeftIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_KEY ?? '';
@@ -75,6 +77,7 @@ async function adminRequest(path: string, options: RequestInit & { token?: strin
 
 export default function AdminScreen() {
   const { user, session, signOut } = useAuth();
+  const { client } = useApp();
   const token = session?.access_token ?? null;
   const { isDark } = useTheme();
   const queryClient = useQueryClient();
@@ -83,8 +86,12 @@ export default function AdminScreen() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('staff');
+  const [fromStaff, setFromStaff] = useState('');
+  const [toStaff, setToStaff] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [reassignNotice, setReassignNotice] = useState<string | null>(null);
 
   const adminEmails = (process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? 'terence@probizn.com')
     .split(',')
@@ -121,6 +128,58 @@ export default function AdminScreen() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: (e: Error) => setError(e.message),
+  });
+
+  // Load clients to power the "reassign staff" bulk action. We only need the
+  // (unfinished) clients whose handling_staff is being handed over.
+  const clientsQuery = useQuery({
+    queryKey: ['admin', 'clients'],
+    queryFn: async () => {
+      const { data, error } = await client
+        .from('clients')
+        .select('id, handling_staff, status')
+        .limit(1000);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    enabled: isAdmin,
+  });
+
+  // Distinct staff names that still have unfinished clients, in a stable order.
+  const unfinishedClients = (clientsQuery.data ?? []).filter(
+    (c: any) => c.status !== 'verified' && c.status !== 'completed'
+  );
+  const staffNames = Array.from(
+    new Set(unfinishedClients.map((c: any) => c.handling_staff).filter((s: any) => !!s))
+  ).sort();
+
+  const pendingCount = unfinishedClients.filter(
+    (c: any) => c.handling_staff === fromStaff
+  ).length;
+
+  const reassign = useMutation({
+    mutationFn: async ({ from, to }: { from: string; to: string }) => {
+      if (!from || !to) throw new Error('Choose both a "from" and "to" staff member.');
+      if (from === to) throw new Error('"From" and "to" staff must be different.');
+      const ids = unfinishedClients
+        .filter((c: any) => c.handling_staff === from)
+        .map((c: any) => c.id);
+      if (ids.length === 0) throw new Error(`No unfinished clients assigned to "${from}".`);
+      const { error } = await client
+        .from('clients')
+        .update({ handling_staff: to })
+        .in('id', ids);
+      if (error) throw new Error(error.message);
+      return ids.length;
+    },
+    onSuccess: (count) => {
+      setReassignNotice(`Reassigned ${count} unfinished client(s) from "${fromStaff}" to "${toStaff}".`);
+      setFromStaff('');
+      setToStaff('');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+    onError: (e: Error) => setReassignError(e.message),
   });
 
   const onSubmit = useCallback(() => {
@@ -291,6 +350,102 @@ export default function AdminScreen() {
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <Text className="text-base font-semibold text-primary-foreground">Create user</Text>
+              )}
+            </Pressable>
+          </View>
+
+          {/* Reassign staff (bulk handover of UNFINISHED clients only) */}
+          <View className="mt-6 rounded-3xl bg-card border border-border p-5">
+            <View className="flex-row items-center gap-2">
+              <ArrowRightLeftIcon className="text-primary" size={18} />
+              <Text className="text-base font-semibold text-foreground">Reassign unfinished clients</Text>
+            </View>
+            <Text className="mt-1 text-xs text-muted-foreground">
+              Hand over every open client from one staff member to another. Completed appointments are left untouched.
+            </Text>
+
+            {reassignError && (
+              <View className="mt-3 rounded-xl bg-destructive/10 p-3">
+                <Text className="text-sm text-destructive">{reassignError}</Text>
+              </View>
+            )}
+            {reassignNotice && (
+              <View className="mt-3 rounded-xl bg-primary/10 p-3">
+                <Text className="text-sm text-primary">{reassignNotice}</Text>
+              </View>
+            )}
+
+            {/* From picker */}
+            <Text className="mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">From</Text>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              {staffNames.length === 0 ? (
+                <Text className="text-sm text-muted-foreground">No staff with open clients.</Text>
+              ) : (
+                staffNames.map((name) => (
+                  <Pressable
+                    key={name}
+                    onPress={() => {
+                      setFromStaff(name);
+                      setReassignError(null);
+                      setReassignNotice(null);
+                    }}
+                    className={`rounded-full px-3 py-1.5 border ${
+                      fromStaff === name ? 'bg-primary border-primary' : 'border-border'
+                    }`}
+                  >
+                    <Text className={`text-xs font-semibold ${fromStaff === name ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+                      {name}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+
+            {/* To picker */}
+            <Text className="mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">To</Text>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              {staffNames.length === 0 ? (
+                <Text className="text-sm text-muted-foreground">No destination staff available.</Text>
+              ) : (
+                staffNames.map((name) => (
+                  <Pressable
+                    key={name}
+                    onPress={() => {
+                      setToStaff(name);
+                      setReassignError(null);
+                      setReassignNotice(null);
+                    }}
+                    className={`rounded-full px-3 py-1.5 border ${
+                      toStaff === name ? 'bg-primary border-primary' : 'border-border'
+                    }`}
+                  >
+                    <Text className={`text-xs font-semibold ${toStaff === name ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+                      {name}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+
+            {fromStaff && (
+              <Text className="mt-3 text-xs text-muted-foreground">
+                {pendingCount} unfinished client{pendingCount === 1 ? '' : 's'} will be moved.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() => reassign.mutate({ from: fromStaff, to: toStaff })}
+              disabled={reassign.isPending || !fromStaff || !toStaff}
+              className={`mt-4 items-center justify-center rounded-2xl py-4 active:scale-[0.98] ${
+                fromStaff && toStaff && fromStaff !== toStaff ? 'bg-primary' : 'bg-border'
+              }`}
+            >
+              {reassign.isPending ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text className={`text-base font-semibold ${fromStaff && toStaff && fromStaff !== toStaff ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+                  Reassign clients
+                </Text>
               )}
             </Pressable>
           </View>
