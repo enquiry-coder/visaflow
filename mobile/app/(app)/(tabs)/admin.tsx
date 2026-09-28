@@ -21,6 +21,8 @@ import {
   MailCheckIcon,
   LogOutIcon,
   ArrowRightLeftIcon,
+  PencilIcon,
+  KeyRoundIcon,
 } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useApp, useAuth, useTheme } from '@/src/hooks';
@@ -34,6 +36,8 @@ cssInterop(RotateCcwIcon, { className: { target: 'style', nativeStyleToProp: { c
 cssInterop(MailCheckIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(LogOutIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(ArrowRightLeftIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(PencilIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(KeyRoundIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_KEY ?? '';
@@ -92,6 +96,12 @@ export default function AdminScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [reassignError, setReassignError] = useState<string | null>(null);
   const [reassignNotice, setReassignNotice] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editEmail, setEditEmail] = useState('');
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [userActionError, setUserActionError] = useState<string | null>(null);
+  const [userActionNotice, setUserActionNotice] = useState<string | null>(null);
 
   const adminEmails = (process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? 'terence@probizn.com')
     .split(',')
@@ -128,6 +138,69 @@ export default function AdminScreen() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: (e: Error) => setError(e.message),
+  });
+
+  const updateEmail = useMutation({
+    mutationFn: ({ id, email }: { id: string; email: string }) =>
+      adminRequest(`/admin/users/${id}/email`, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+        token,
+      }),
+    onSuccess: () => {
+      setUserActionNotice(`Email updated to ${editEmail.trim()}.`);
+      setEditingUser(null);
+      setEditEmail('');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (e: Error) => setUserActionError(e.message),
+  });
+
+  const bootstrapStaff = useMutation({
+    mutationFn: async () => {
+      const specs = [
+        { email: 'staff1@probizn.com', name: 'Hazel', role: 'staff' },
+        { email: 'staff2@probizn.com', name: 'Iris', role: 'staff' },
+        { email: 'staff3@probizn.com', name: 'Sarah Mitchell', role: 'staff' },
+      ];
+      const results = [];
+      for (const s of specs) {
+        // Create only if the email isn't already in the roster.
+        const existing = (usersQuery.data as any)?.users ?? [];
+        if (existing.some((u: AdminUser) => (u.email || '').toLowerCase() === s.email.toLowerCase())) {
+          results.push(`skipped ${s.email} (already exists)`);
+          continue;
+        }
+        await adminRequest('/admin/users', {
+          method: 'POST',
+          body: JSON.stringify({ email: s.email, password: 'ChangeMe123!', name: s.name, role: s.role }),
+          token,
+        });
+        results.push(`created ${s.email}`);
+      }
+      return results.join('; ');
+    },
+    onSuccess: (summary) => {
+      setNotice(`Staff roster: ${summary}`);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const resetUserPassword = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      adminRequest(`/admin/users/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+        token,
+      }),
+    onSuccess: () => {
+      setUserActionNotice('Password reset. The staff member can now sign in with the new password.');
+      setResetTarget(null);
+      setResetPassword('');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (e: Error) => setUserActionError(e.message),
   });
 
   // Load clients to power the "reassign staff" bulk action. We only need the
@@ -352,6 +425,20 @@ export default function AdminScreen() {
                 <Text className="text-base font-semibold text-primary-foreground">Create user</Text>
               )}
             </Pressable>
+
+            <Pressable
+              onPress={() => bootstrapStaff.mutate()}
+              disabled={bootstrapStaff.isPending}
+              className="mt-3 items-center justify-center rounded-2xl border border-border py-3 active:scale-[0.98]"
+            >
+              {bootstrapStaff.isPending ? (
+                <ActivityIndicator color={isDark ? '#8d9d9e' : '#70797a'} />
+              ) : (
+                <Text className="text-sm font-semibold text-muted-foreground">
+                  Recreate 3 staff users (placeholder emails)
+                </Text>
+              )}
+            </Pressable>
           </View>
 
           {/* Reassign staff (bulk handover of UNFINISHED clients only) */}
@@ -450,6 +537,18 @@ export default function AdminScreen() {
             </Pressable>
           </View>
 
+          {/* Per-user action feedback */}
+          {userActionError && (
+            <View className="mt-6 rounded-xl bg-destructive/10 p-3">
+              <Text className="text-sm text-destructive">{userActionError}</Text>
+            </View>
+          )}
+          {userActionNotice && (
+            <View className="mt-6 rounded-xl bg-primary/10 p-3">
+              <Text className="text-sm text-primary">{userActionNotice}</Text>
+            </View>
+          )}
+
           {/* User list */}
           <Text className="mt-8 mb-3 text-sm font-semibold text-muted-foreground">Active users</Text>
           {usersQuery.isLoading ? (
@@ -486,14 +585,107 @@ export default function AdminScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Pressable
-                      onPress={() => setBan.mutate({ id: u.id, banned: true })}
-                      disabled={setBan.isPending}
-                      className="ml-3 items-center justify-center rounded-xl bg-destructive/10 p-2.5 active:scale-95"
-                    >
-                      <BanIcon className="text-destructive" size={18} />
-                    </Pressable>
+                    <View className="ml-3 flex-row items-center gap-1.5">
+                      <Pressable
+                        onPress={() => {
+                          setEditingUser(u);
+                          setEditEmail(u.email || '');
+                          setUserActionError(null);
+                          setUserActionNotice(null);
+                        }}
+                        className="items-center justify-center rounded-xl bg-primary/10 p-2.5 active:scale-95"
+                      >
+                        <PencilIcon className="text-primary" size={16} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setResetTarget(u);
+                          setResetPassword('');
+                          setUserActionError(null);
+                          setUserActionNotice(null);
+                        }}
+                        className="items-center justify-center rounded-xl bg-primary/10 p-2.5 active:scale-95"
+                      >
+                        <KeyRoundIcon className="text-primary" size={16} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setBan.mutate({ id: u.id, banned: true })}
+                        disabled={setBan.isPending}
+                        className="items-center justify-center rounded-xl bg-destructive/10 p-2.5 active:scale-95"
+                      >
+                        <BanIcon className="text-destructive" size={18} />
+                      </Pressable>
+                    </View>
                   </View>
+
+                  {/* Inline edit-email form */}
+                  {editingUser?.id === u.id && (
+                    <View className="mt-3 rounded-xl bg-background border border-border p-3">
+                      <Text className="text-xs font-semibold text-muted-foreground">Change email</Text>
+                      <TextInput
+                        className="mt-2 bg-card rounded-xl px-3 py-2.5 border border-border text-foreground"
+                        placeholder="New email"
+                        placeholderTextColor="#8d9d9e"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        value={editEmail}
+                        onChangeText={setEditEmail}
+                      />
+                      <View className="mt-2 flex-row gap-2">
+                        <Pressable
+                          onPress={() => updateEmail.mutate({ id: u.id, email: editEmail.trim() })}
+                          disabled={updateEmail.isPending || !editEmail.trim()}
+                          className="flex-1 items-center justify-center rounded-xl bg-primary py-2.5 active:scale-95"
+                        >
+                          {updateEmail.isPending ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text className="text-sm font-semibold text-primary-foreground">Save</Text>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          onPress={() => { setEditingUser(null); setEditEmail(''); }}
+                          className="items-center justify-center rounded-xl border border-border px-4 py-2.5 active:opacity-70"
+                        >
+                          <Text className="text-sm font-semibold text-muted-foreground">Cancel</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Inline reset-password form */}
+                  {resetTarget?.id === u.id && (
+                    <View className="mt-3 rounded-xl bg-background border border-border p-3">
+                      <Text className="text-xs font-semibold text-muted-foreground">Reset password</Text>
+                      <TextInput
+                        className="mt-2 bg-card rounded-xl px-3 py-2.5 border border-border text-foreground"
+                        placeholder="New password (8+ characters)"
+                        placeholderTextColor="#8d9d9e"
+                        secureTextEntry
+                        value={resetPassword}
+                        onChangeText={setResetPassword}
+                      />
+                      <View className="mt-2 flex-row gap-2">
+                        <Pressable
+                          onPress={() => resetUserPassword.mutate({ id: u.id, password: resetPassword })}
+                          disabled={resetUserPassword.isPending || resetPassword.length < 8}
+                          className="flex-1 items-center justify-center rounded-xl bg-primary py-2.5 active:scale-95"
+                        >
+                          {resetUserPassword.isPending ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text className="text-sm font-semibold text-primary-foreground">Save</Text>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          onPress={() => { setResetTarget(null); setResetPassword(''); }}
+                          className="items-center justify-center rounded-xl border border-border px-4 py-2.5 active:opacity-70"
+                        >
+                          <Text className="text-sm font-semibold text-muted-foreground">Cancel</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>

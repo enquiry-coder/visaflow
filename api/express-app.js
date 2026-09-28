@@ -10,10 +10,23 @@ app.use(express.json());
 // routes below (registered at /admin/...) match regardless of how the request
 // arrived (direct /admin/users via local dev, or /api/vercel via Vercel).
 app.use((req, res, next) => {
-  // `x-now-route-matches` or the original path may be present; otherwise
-  // map the serverless path back to the public admin path.
-  if (req.path && req.path.includes("/api/vercel")) {
-    req.url = req.url.replace(/^\/api\/vercel/, "/");
+  // Vercel rewrites /admin/users* -> /api/vercel, so the handler receives a
+  // request whose URL is /api/vercel. Restore the ORIGINAL public path so the
+  // routes below (registered at /admin/...) match. Vercel sets x-original-path
+  // (when configured) with the pre-rewrite path; otherwise reconstruct from the
+  // URL. Preserve the query string.
+  const originalPath = req.get("x-original-path");
+  if (originalPath && originalPath.startsWith("/admin/")) {
+    const qs = req.url.split("?")[1];
+    req.url = originalPath + (qs ? `?${qs}` : "");
+    req.originalUrl = req.url;
+  } else {
+    const [path, query] = req.url.split("?");
+    if (path.startsWith("/api/vercel")) {
+      const restored = path.replace(/^\/api\/vercel/, "") || "/";
+      req.url = restored + (query ? `?${query}` : "");
+      req.originalUrl = req.url;
+    }
   }
   next();
 });
@@ -153,6 +166,55 @@ app.patch("/admin/users/:id", requireAdmin, async (req, res) => {
     }
     const data = await resp.json();
     return res.json(data);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Update a user's email (and optionally full name). Keeps existing metadata.
+app.post("/admin/users/:id/email", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, name } = req.body || {};
+    if (!id || !email) return res.status(400).json({ error: "email is required" });
+    const body = { email: String(email).trim() };
+    // Merge full_name only if explicitly provided, so toggling email doesn't wipe it.
+    if (typeof name === "string" && name.trim()) {
+      body.user_metadata = { full_name: name.trim() };
+    }
+    const resp = await supabaseAdminFetch(`admin/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const b = await resp.json().catch(() => ({}));
+      return res.status(resp.status).json({ error: b.msg || b.message || b.error_description || "Failed to update email" });
+    }
+    return res.json(await resp.json());
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Reset a user's password. Supabase auto-confirms the new password so the
+// staff member can sign in immediately with it (email confirmation is OFF).
+app.post("/admin/users/:id/reset-password", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body || {};
+    if (!id || !password) return res.status(400).json({ error: "password is required" });
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+    const resp = await supabaseAdminFetch(`admin/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ password: String(password) }),
+    });
+    if (!resp.ok) {
+      const b = await resp.json().catch(() => ({}));
+      return res.status(resp.status).json({ error: b.msg || b.message || b.error_description || "Failed to reset password" });
+    }
+    return res.json(await resp.json());
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
