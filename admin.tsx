@@ -151,15 +151,8 @@ export default function AdminScreen() {
         body: JSON.stringify({ ban_duration: banned ? '876600h' : null }),
         token,
       }),
-    onSuccess: (_data, vars) => {
-      setUserActionError(null);
-      setUserActionNotice(vars.banned ? 'User disabled.' : 'User restored.');
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-    },
-    onError: (e: Error) => {
-      setUserActionNotice(null);
-      setUserActionError(e.message);
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onError: (e: Error) => setError(e.message),
   });
 
   const updateEmail = useMutation({
@@ -847,10 +840,9 @@ export default function AdminScreen() {
                       <Pressable
                         onPress={() => setBan.mutate({ id: u.id, banned: false })}
                         disabled={setBan.isPending}
-                        className="ml-3 flex-row items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-2.5 active:scale-95"
+                        className="ml-3 items-center justify-center rounded-xl bg-primary/10 p-2.5 active:scale-95"
                       >
                         <RotateCcwIcon className="text-primary" size={18} />
-                        <Text className="text-xs font-semibold text-primary">Restore</Text>
                       </Pressable>
                     </View>
                   </View>

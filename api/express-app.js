@@ -212,9 +212,12 @@ app.patch("/admin/users/:id", requireAdmin, async (req, res) => {
     if (typeof ban_duration !== "string" && ban_duration !== undefined) {
       return res.status(400).json({ error: "ban_duration must be a string (e.g. '876600h')" });
     }
+    // To un-ban a user Supabase expects the sentinel value "none", NOT null.
+    // null leaves banned_until untouched (which makes the Restore button appear to do nothing).
+    const effectiveBan = ban_duration == null ? "none" : ban_duration;
     const resp = await supabaseAdminFetch(`admin/users/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ ban_duration: ban_duration || null }),
+      body: JSON.stringify({ ban_duration: effectiveBan }),
     });
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}));
