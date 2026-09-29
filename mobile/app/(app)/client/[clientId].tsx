@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useApp, useAuth } from '@/src/hooks';
 import SalutationPicker from '@/components/SalutationPicker';
 import NationalityPicker from '@/components/NationalityPicker';
 import { uploadClientDoc } from '@/src/lib/upload';
+import { getStaffZoomLink, saveStaffZoomLink } from '@/src/lib/remember';
 
 // Resolve the hosted base URL for the client portal (same logic as the pipeline board).
 function getPortalBase(): string {
@@ -48,6 +49,18 @@ export default function ClientDetailScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Pre-fill this staff user's Zoom link from the last time they entered one.
+  useEffect(() => {
+    let active = true;
+    if (!user?.id) return;
+    getStaffZoomLink(user.id).then((saved) => {
+      if (active && saved && !zoomLink) setZoomLink(saved);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
   const { data: c, isLoading } = useQuery({
     queryKey: ['client', clientId],
     queryFn: async () => {
@@ -74,6 +87,7 @@ export default function ClientDetailScreen() {
       setError('Enter the Zoom link first');
       return;
     }
+    if (user?.id) saveStaffZoomLink(user.id, link);
     const exactTime = confirmedTime.trim() || c.confirmed_time || c.preferred_time || '';
     update.mutate({
       zoom_link: link,

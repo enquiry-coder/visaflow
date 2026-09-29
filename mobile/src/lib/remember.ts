@@ -20,3 +20,28 @@ export async function getRememberedEmail(): Promise<string> {
     return '';
   }
 }
+
+// Remember each staff user's Zoom link so entering it once auto-fills it for
+// every subsequent client they handle. Keyed per user id (not globally), so
+// different staff keep their own distinct Zoom links.
+const zoomKey = (userId: string) => `visaflow:zoom_link:${userId}`;
+
+export async function saveStaffZoomLink(userId: string, link: string): Promise<void> {
+  try {
+    const value = (link || '').trim();
+    const key = zoomKey(userId);
+    if (value && userId) await AsyncStorage.setItem(key, value);
+    else if (userId) await AsyncStorage.removeItem(key);
+  } catch {
+    // best-effort; never block sending on storage failure
+  }
+}
+
+export async function getStaffZoomLink(userId: string): Promise<string> {
+  try {
+    if (!userId) return '';
+    return (await AsyncStorage.getItem(zoomKey(userId))) || '';
+  } catch {
+    return '';
+  }
+}
