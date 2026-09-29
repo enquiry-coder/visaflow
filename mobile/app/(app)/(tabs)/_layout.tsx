@@ -43,7 +43,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="admin"
         options={{
-          title: 'Admin',
+          title: 'Team & cases',
           tabBarIcon: ({ focused }) => (
             <ShieldUserIcon className={focused ? 'text-primary' : 'text-muted-foreground'} size={24} />
           ),

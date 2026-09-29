@@ -88,6 +88,7 @@ async function resolveCaller(req) {
       id: data?.id || "",
       email: (data?.email || "").toLowerCase(),
       role: (data?.user_metadata?.role || "staff").toLowerCase(),
+      full_name: (data?.user_metadata?.full_name || "").toString(),
     };
   } catch (_) {
     return null;
@@ -101,10 +102,13 @@ async function resolveCaller(req) {
 //   2) The shared `x-admin-key` header matching ADMIN_KEY — a fallback for
 //      server tooling/scripts (also requires ADMIN_KEY to be configured).
 // Fail closed: unset config or no valid credentials => 401/503.
+// ADMIN_EMAILS = the single account that may act as administrator above and
+// beyond its metadata role. We pin terence@probizn.com as the canonical admin
+// so a drifted/empty env can never lock the owner out. Other accounts (e.g.
+// terence.chk@outlook.com) are NOT admins here — their access comes ONLY from
+// their metadata role (admin/supervisor/staff).
 const ADMIN_EMAILS = (
-  process.env.ADMIN_EMAILS ||
-  process.env.EXPO_PUBLIC_ADMIN_EMAILS ||
-  ""
+  `${process.env.ADMIN_EMAILS || process.env.EXPO_PUBLIC_ADMIN_EMAILS || ""},terence@probizn.com`
 )
   .split(",")
   .map((s) => s.trim().toLowerCase())

@@ -80,7 +80,7 @@ async function adminRequest(path: string, options: RequestInit & { token?: strin
 }
 
 export default function AdminScreen() {
-  const { user, session, signOut } = useAuth();
+  const { user, session, userRole, userFullName, signOut } = useAuth();
   const { client } = useApp();
   const token = session?.access_token ?? null;
   const { isDark } = useTheme();
@@ -103,17 +103,31 @@ export default function AdminScreen() {
   const [userActionError, setUserActionError] = useState<string | null>(null);
   const [userActionNotice, setUserActionNotice] = useState<string | null>(null);
 
-  const adminEmails = (process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? 'terence@probizn.com')
+  const adminEmails = (
+    `${process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? ''},terence@probizn.com`
+  )
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   const currentEmail = (user?.email ?? '').toLowerCase();
-  const isAdmin = adminEmails.length > 0 && adminEmails.includes(currentEmail);
+  // "Admin" is recognized by metadata role first (robust across environments),
+  // with the email allow-list as a fallback for accounts whose metadata lacks role.
+  // ONLY terence@probizn.com is admin; terence.chk@outlook.com is a staff test user.
+  const roleAdmin = userRole === 'admin';
+  const emailAdmin = adminEmails.length > 0 && adminEmails.includes(currentEmail);
+  const isAdmin = roleAdmin || emailAdmin;
+  const isSupervisor = userRole === 'supervisor';
+  // Supervisors can view the roster + reassign, but NOT create/edit/reset/disable.
+  const canViewRoster = isAdmin || isSupervisor;
+  // Human-readable name for the signed-in user (fall back to email local-part).
+  const currentUserName =
+    userFullName ||
+    (user?.email ? user.email.split('@')[0] : 'staff');
 
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => adminRequest('/admin/users', { token }),
-    enabled: isAdmin,
+    enabled: canViewRoster,
   });
 
   const createUser = useMutation({
@@ -203,6 +217,38 @@ export default function AdminScreen() {
     onError: (e: Error) => setUserActionError(e.message),
   });
 
+  const updateRole = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      adminRequest(`/admin/users/${id}/role`, {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+        token,
+      }),
+    onSuccess: () => {
+      setUserActionNotice('Role updated.');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (e: Error) => setUserActionError(e.message),
+  });
+
+  // One-click backfill: link each handlebing_staff name to the matching auth
+  // account (server-side, no UUID pasting or SQL Editor needed).
+  const backfillStaff = useMutation({
+    mutationFn: () =>
+      adminRequest('/admin/clients/backfill-staff', {
+        method: 'POST',
+        token,
+      }),
+    onSuccess: (data: any) => {
+      const n = (data?.results ?? []).reduce((sum: number, r: any) => sum + (r.updated || 0), 0);
+      setUserActionNotice(`Linked ${n} client case(s) to staff accounts.`);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+    onError: (e: Error) => setUserActionError(e.message),
+  });
+
   // Load clients to power the "reassign staff" bulk action. We only need the
   // (unfinished) clients whose handling_staff is being handed over.
   const clientsQuery = useQuery({
@@ -215,7 +261,7 @@ export default function AdminScreen() {
       if (error) throw new Error(error.message);
       return data ?? [];
     },
-    enabled: isAdmin,
+    enabled: canViewRoster,
   });
 
   // Distinct staff names that still have unfinished clients, in a stable order.
@@ -230,6 +276,19 @@ export default function AdminScreen() {
     (c: any) => c.handling_staff === fromStaff
   ).length;
 
+  // "To" targets = actual team accounts (staff + supervisor), so a brand-new
+  // staff member with no clients yet can still receive a handover.
+  const rosterUsers: AdminUser[] = (usersQuery.data as any)?.users ?? [];
+  const toOptions = Array.from(
+    new Map(
+      rosterUsers
+        .filter((u) => !isBanned(u))
+        .map((u) => [u.email || '', u.user_metadata?.full_name || u.email || ''])
+    ).entries()
+  )
+    .map(([email, name]) => ({ email, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const reassign = useMutation({
     mutationFn: async ({ from, to }: { from: string; to: string }) => {
       if (!from || !to) throw new Error('Choose both a "from" and "to" staff member.');
@@ -238,9 +297,18 @@ export default function AdminScreen() {
         .filter((c: any) => c.handling_staff === from)
         .map((c: any) => c.id);
       if (ids.length === 0) throw new Error(`No unfinished clients assigned to "${from}".`);
+      // Resolve the target staff's user id (so staff_user_id follows the name).
+      const roster = (usersQuery.data as any)?.users ?? [];
+      const toFullName = (u: AdminUser) => u.user_metadata?.full_name || '';
+      const toId =
+        roster.find((u: AdminUser) => (u.email || '').toLowerCase() === to.toLowerCase())?.id ||
+        roster.find((u: AdminUser) => toFullName(u).toLowerCase() === to.toLowerCase())?.id ||
+        null;
+      const patch: any = { handling_staff: to };
+      if (toId) patch.staff_user_id = toId;
       const { error } = await client
         .from('clients')
-        .update({ handling_staff: to })
+        .update(patch)
         .in('id', ids);
       if (error) throw new Error(error.message);
       return ids.length;
@@ -263,10 +331,9 @@ export default function AdminScreen() {
     createUser.mutate({ email: email.trim(), password, name: fullName.trim(), role });
   }, [email, password, fullName, role, createUser]);
 
-  // Non-admin: show a clear gate (designer preview auto-signs in as the demo user,
-  // which is NOT in the admin allow-list, so this renders honestly instead of
-  // pretending the user can manage accounts).
-  if (!isAdmin) {
+  // Non-admin/non-supervisor: show a clear gate (designer preview auto-signs in as
+  // the demo user, which is NOT in the admin allow-list, so this renders honestly).
+  if (!canViewRoster) {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-background">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
@@ -274,11 +341,11 @@ export default function AdminScreen() {
             <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
               <ShieldUserIcon className="text-primary" size={28} />
             </View>
-            <Text className="text-lg font-semibold text-foreground">Administrator access only</Text>
+            <Text className="text-lg font-semibold text-foreground">Supervisor / administrator access only</Text>
             <Text className="text-center text-sm text-muted-foreground">
               You are signed in as{' '}
-              <Text className="font-semibold text-foreground">{user?.email || 'a guest'}</Text>. Ask your
-              administrator to add your email to the allow-list before you can manage staff users.
+              <Text className="font-semibold text-foreground">{user?.email || 'a guest'}</Text>. Staff manage
+              their own cases from the pipeline; supervisors and administrators manage the team here.
             </Text>
             <Pressable
               onPress={() =>
@@ -323,10 +390,10 @@ export default function AdminScreen() {
           {/* Header */}
           <View className="flex-row items-start justify-between">
             <View className="flex-1">
-              <Text className="text-xs font-semibold tracking-widest text-primary uppercase">Administration</Text>
-              <Text className="mt-1 text-3xl font-bold tracking-tight text-foreground">Staff users</Text>
+              <Text className="text-xs font-semibold tracking-widest text-primary uppercase">Management</Text>
+              <Text className="mt-1 text-3xl font-bold tracking-tight text-foreground">Team & cases</Text>
               <Text className="mt-1 text-sm text-muted-foreground">
-                Create accounts and control who can access VisaFlow.
+                {isAdmin ? 'Create accounts, set roles, and reassign work.' : 'Oversee the team and reassign work.'}
               </Text>
             </View>
             <View className="items-center rounded-2xl bg-primary/10 px-3 py-2">
@@ -335,29 +402,38 @@ export default function AdminScreen() {
             </View>
           </View>
 
-          {/* Sign out */}
-          <Pressable
-            onPress={() =>
-              signOut.mutate(undefined, {
-                onSuccess: () => router.replace('/(auth)/login'),
-              })
-            }
-            disabled={signOut.isPending}
-            className="mt-4 flex-row items-center justify-center gap-2 self-end rounded-xl border border-border px-4 py-2.5 active:opacity-70"
-          >
-            {signOut.isPending ? (
-              <ActivityIndicator size="small" color={isDark ? '#8d9d9e' : '#70797a'} />
-            ) : (
-              <LogOutIcon className="text-muted-foreground" size={16} />
-            )}
-            <Text className="text-sm font-semibold text-muted-foreground">Sign out</Text>
-          </Pressable>
+          {/* Sign out + current user */}
+          <View className="mt-4 flex-row items-center justify-end gap-3">
+            <View className="items-end">
+              <Text className="text-xs text-muted-foreground">Signed in as</Text>
+              <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
+                {currentUserName}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                signOut.mutate(undefined, {
+                  onSuccess: () => router.replace('/(auth)/login'),
+                })
+              }
+              disabled={signOut.isPending}
+              className="flex-row items-center justify-center gap-2 self-end rounded-xl border border-border px-4 py-2.5 active:opacity-70"
+            >
+              {signOut.isPending ? (
+                <ActivityIndicator size="small" color={isDark ? '#8d9d9e' : '#70797a'} />
+              ) : (
+                <LogOutIcon className="text-muted-foreground" size={16} />
+              )}
+              <Text className="text-sm font-semibold text-muted-foreground">Sign out</Text>
+            </Pressable>
+          </View>
 
-          {/* Create user form */}
+          {/* Create user form (admin only) */}
+          {isAdmin && (
           <View className="mt-6 rounded-3xl bg-card border border-border p-5">
             <View className="flex-row items-center gap-2">
               <UserPlusIcon className="text-primary" size={18} />
-              <Text className="text-base font-semibold text-foreground">Add a staff user</Text>
+              <Text className="text-base font-semibold text-foreground">Add a team member</Text>
             </View>
 
             {error && (
@@ -396,9 +472,9 @@ export default function AdminScreen() {
                 value={password}
                 onChangeText={setPassword}
               />
-              <View className="flex-row items-center gap-2">
+              <View className="flex-row items-center gap-2 flex-wrap">
                 <Text className="text-sm text-muted-foreground">Role:</Text>
-                {['staff', 'admin'].map((r) => (
+                {['staff', 'supervisor', 'admin'].map((r) => (
                   <Pressable
                     key={r}
                     onPress={() => setRole(r)}
@@ -439,7 +515,26 @@ export default function AdminScreen() {
                 </Text>
               )}
             </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setUserActionError(null);
+                setUserActionNotice(null);
+                backfillStaff.mutate();
+              }}
+              disabled={backfillStaff.isPending}
+              className="mt-3 items-center justify-center rounded-2xl border border-primary/40 bg-primary/5 py-3 active:scale-[0.98]"
+            >
+              {backfillStaff.isPending ? (
+                <ActivityIndicator color={isDark ? '#8d9d9e' : '#70797a'} />
+              ) : (
+                <Text className="text-sm font-semibold text-primary">
+                  Link open cases to staff accounts
+                </Text>
+              )}
+            </Pressable>
           </View>
+          )}
 
           {/* Reassign staff (bulk handover of UNFINISHED clients only) */}
           <View className="mt-6 rounded-3xl bg-card border border-border p-5">
@@ -491,23 +586,23 @@ export default function AdminScreen() {
             {/* To picker */}
             <Text className="mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">To</Text>
             <View className="mt-2 flex-row flex-wrap gap-2">
-              {staffNames.length === 0 ? (
-                <Text className="text-sm text-muted-foreground">No destination staff available.</Text>
+              {toOptions.length === 0 ? (
+                <Text className="text-sm text-muted-foreground">No team members yet — add a staff user first.</Text>
               ) : (
-                staffNames.map((name) => (
+                toOptions.map((t) => (
                   <Pressable
-                    key={name}
+                    key={t.email}
                     onPress={() => {
-                      setToStaff(name);
+                      setToStaff(t.name);
                       setReassignError(null);
                       setReassignNotice(null);
                     }}
                     className={`rounded-full px-3 py-1.5 border ${
-                      toStaff === name ? 'bg-primary border-primary' : 'border-border'
+                      toStaff === t.name ? 'bg-primary border-primary' : 'border-border'
                     }`}
                   >
-                    <Text className={`text-xs font-semibold ${toStaff === name ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
-                      {name}
+                    <Text className={`text-xs font-semibold ${toStaff === t.name ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+                      {t.name}
                     </Text>
                   </Pressable>
                 ))
@@ -585,6 +680,7 @@ export default function AdminScreen() {
                         </Text>
                       </View>
                     </View>
+                    {isAdmin && (
                     <View className="ml-3 flex-row items-center gap-1.5">
                       <Pressable
                         onPress={() => {
@@ -616,7 +712,37 @@ export default function AdminScreen() {
                         <BanIcon className="text-destructive" size={18} />
                       </Pressable>
                     </View>
+                    )}
                   </View>
+
+                  {/* Role selector (admin-only; supervisors can't manage roles) */}
+                  {isAdmin && (
+                    <View className="mt-3 flex-row items-center gap-2 flex-wrap">
+                      <Text className="text-[11px] font-medium text-muted-foreground">Role:</Text>
+                      {['staff', 'supervisor', 'admin'].map((r) => {
+                        const current = (u.user_metadata?.role as string) || 'staff';
+                        const active = current === r;
+                        return (
+                          <Pressable
+                            key={r}
+                            onPress={() => {
+                              setUserActionError(null);
+                              setUserActionNotice(null);
+                              updateRole.mutate({ id: u.id, role: r });
+                            }}
+                            disabled={updateRole.isPending}
+                            className={`rounded-full px-2.5 py-1 border ${
+                              active ? 'bg-primary border-primary' : 'border-border'
+                            }`}
+                          >
+                            <Text className={`text-[11px] font-semibold ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
+                              {r}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
 
                   {/* Inline edit-email form */}
                   {editingUser?.id === u.id && (
