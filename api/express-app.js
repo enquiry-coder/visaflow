@@ -209,7 +209,7 @@ app.patch("/admin/users/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { ban_duration } = req.body || {};
-    if (typeof ban_duration !== "string" && ban_duration !== undefined) {
+    if (ban_duration !== undefined && ban_duration !== null && typeof ban_duration !== "string") {
       return res.status(400).json({ error: "ban_duration must be a string (e.g. '876600h')" });
     }
     // To un-ban a user Supabase expects the sentinel value "none", NOT null.

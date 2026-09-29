@@ -148,7 +148,7 @@ export default function AdminScreen() {
     mutationFn: ({ id, banned }: { id: string; banned: boolean }) =>
       adminRequest(`/admin/users/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ ban_duration: banned ? '876600h' : null }),
+        body: JSON.stringify({ ban_duration: banned ? '876600h' : 'none' }),
         token,
       }),
     onSuccess: (_data, vars) => {
