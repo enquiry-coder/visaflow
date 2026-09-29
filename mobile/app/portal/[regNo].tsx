@@ -20,7 +20,7 @@ import { useApp } from '@/src/hooks';
 import { uploadClientDoc } from '@/src/lib/upload';
 import SalutationPicker from '@/components/SalutationPicker';
 import NationalityPicker from '@/components/NationalityPicker';
-import { buildCalendarEvent, openInCalendar } from '@/src/lib/calendar';
+import { buildCalendarEvent, openInCalendar, OFFICE_TIME_ZONE_LABEL } from '@/src/lib/calendar';
 import CalendarPicker from '@/components/CalendarPicker';
 
 cssInterop(CameraIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -249,7 +249,7 @@ export default function ClientPortalScreen() {
           </Text>
           {c?.confirmed_time && (
             <Text className="mt-4 text-sm font-semibold text-foreground">
-              Confirmed: {c.confirmed_date ?? c.preferred_date ?? ''} at {c.confirmed_time}
+              Confirmed: {c.confirmed_date ?? c.preferred_date ?? ''} at {c.confirmed_time} ({OFFICE_TIME_ZONE_LABEL})
             </Text>
           )}
         </View>
@@ -288,6 +288,9 @@ export default function ClientPortalScreen() {
                 <Text className="text-xs font-semibold text-primary-foreground/80 uppercase tracking-wide">Your Confirmed Interview</Text>
                 <Text className="mt-1 text-xl font-bold text-primary-foreground">
                   {c.confirmed_date ?? c.preferred_date ?? ''} at {c.confirmed_time}
+                </Text>
+                <Text className="mt-0.5 text-xs font-medium text-primary-foreground/80">
+                  {OFFICE_TIME_ZONE_LABEL}
                 </Text>
                 {c.zoom_link && (
                   <Text className="text-xs text-primary-foreground/80 mt-0.5">{c.zoom_link}</Text>

@@ -94,7 +94,7 @@ export default function ClientDetailScreen() {
       confirmed_time: confirmedTime.trim() || c.confirmed_time || null,
       confirmed_date: c.preferred_date || null,
     });
-    const msg = `Thanks ${c.first_name}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime}` : ''}. Here is your meeting link: ${link}`;
+    const msg = `Thanks ${c.first_name}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime} (Hong Kong time, UTC+8)` : ''}. Here is your meeting link: ${link}`;
     const phone = (c.phone || '').replace(/\D/g, '');
     try {
       await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
@@ -268,6 +268,7 @@ export default function ClientDetailScreen() {
                   <Text className="mt-0.5 text-base font-semibold text-foreground">
                     {c.confirmed_date ?? c.preferred_date ?? ''} at {c.confirmed_time}
                   </Text>
+                  <Text className="text-xs text-muted-foreground">Hong Kong time (UTC+8)</Text>
                 </View>
               )}
             </View>
