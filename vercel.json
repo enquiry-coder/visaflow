@@ -17,6 +17,7 @@
   ],
   "headers": [
     { "source": "/admin/clients/(.*)", "headers": [{ "key": "x-original-path", "value": "/admin/clients/$1" }] },
-    { "source": "/admin/users(?:/(.*))?", "headers": [{ "key": "x-original-path", "value": "/admin/users/$1" }] }
+    { "source": "/admin/users/(.*)", "headers": [{ "key": "x-original-path", "value": "/admin/users/$1" }] },
+    { "source": "/admin/users", "headers": [{ "key": "x-original-path", "value": "/admin/users" }] }
   ]
 }
