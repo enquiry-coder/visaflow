@@ -47,7 +47,7 @@ function getPortalBase(): string {
 
 export default function PipelineScreen() {
   const { client } = useApp();
-  const { user, userRole, signOut } = useAuth();
+  const { user, userRole, userFullName, signOut } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -232,6 +232,7 @@ export default function PipelineScreen() {
               <Text className="mt-1 text-sm text-muted-foreground">
                 {canSeeAll ? `${clients?.length ?? 0} records in the lifecycle` : `${clients?.length ?? 0} of your assigned cases`}
               </Text>
+              <Text className="mt-2 text-xs text-muted-foreground">Signed in as <Text className="font-semibold text-foreground">{userFullName || user?.email || 'User'}</Text></Text>
             </View>
             <Pressable
               onPress={() =>

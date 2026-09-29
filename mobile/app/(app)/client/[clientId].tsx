@@ -39,7 +39,7 @@ cssInterop(CalendarClockIcon, { className: { target: 'style', nativeStyleToProp:
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const { client } = useApp();
-  const { user } = useAuth();
+  const { user, userFullName } = useAuth();
   const queryClient = useQueryClient();
   const [zoomLink, setZoomLink] = useState('');
   const [salutation, setSalutation] = useState('');
@@ -190,6 +190,7 @@ export default function ClientDetailScreen() {
           <View className="flex-1">
             <Text className="text-lg font-bold text-foreground">{c.first_name} {c.last_name}</Text>
             <Text className="text-xs text-muted-foreground">{c.reg_no} · {c.status === 'verified' ? 'Verified & Closed' : c.status === 'appt_set' ? 'Appt Set' : 'Awaiting Input'}</Text>
+            <Text className="mt-0.5 text-[11px] text-muted-foreground">Signed in as <Text className="font-semibold text-foreground">{userFullName || user?.email || 'User'}</Text></Text>
           </View>
         </View>
 

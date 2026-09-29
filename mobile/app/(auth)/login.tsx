@@ -107,6 +107,7 @@ export default function LoginScreen() {
               placeholderTextColor="#8d9d9e"
               autoCapitalize="none"
               keyboardType="email-address"
+              autoComplete="off"
               value={email}
               onChangeText={setEmail}
             />
@@ -115,6 +116,7 @@ export default function LoginScreen() {
               placeholder="Password"
               placeholderTextColor="#8d9d9e"
               secureTextEntry
+              autoComplete="new-password"
               value={password}
               onChangeText={setPassword}
             />

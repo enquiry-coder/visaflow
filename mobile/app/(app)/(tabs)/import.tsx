@@ -133,6 +133,7 @@ export default function ImportScreen() {
             <Text className="mt-1 text-sm text-muted-foreground">
               Paste your Excel rows here — Handling Staff auto-assigns on import.
             </Text>
+            <Text className="mt-2 text-xs text-muted-foreground">Signed in as <Text className="font-semibold text-foreground">{userFullName || user?.email || 'User'}</Text></Text>
           </View>
 
           {/* Paste target */}
