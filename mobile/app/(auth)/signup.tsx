@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/hooks';
+import { passwordError } from '@/src/lib/password';
 
 // The confirmation link in Supabase's email is built from `emailRedirectTo` (if set) or the
 // dashboard Site URL. Point it explicitly at the deployed site so the link never resolves to
@@ -37,8 +38,9 @@ export default function SignupScreen() {
     setNotice(null);
 
     if (!email.trim()) return setError('Enter your work email.');
-    if (password.length < 8) return setError('Password must be at least 8 characters.');
     if (password !== confirm) return setError('Passwords do not match.');
+    const pwdErr = passwordError(password);
+    if (pwdErr) return setError(pwdErr);
 
     signUp.mutate(
       { email: email.trim(), password, redirectTo: `${getWebOrigin()}/login` },
@@ -118,7 +120,7 @@ export default function SignupScreen() {
             />
             <TextInput
               className="bg-card rounded-xl px-4 py-3.5 border border-border text-foreground"
-              placeholder="Password (8+ characters)"
+              placeholder="Password (6-8 letters/numbers)"
               placeholderTextColor="#8d9d9e"
               secureTextEntry
               value={password}

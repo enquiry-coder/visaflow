@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/hooks';
+import { getRememberedEmail } from '@/src/lib/remember';
 
 export default function LoginScreen() {
   const { signIn, user, resendConfirmation } = useAuth();
@@ -21,6 +22,17 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Pre-fill only the email from a previous sign-in (never the password).
+  useEffect(() => {
+    let active = true;
+    getRememberedEmail().then((saved) => {
+      if (active && saved && !email) setEmail(saved);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const onSubmit = () => {
     setError(null);

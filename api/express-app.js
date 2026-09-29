@@ -175,6 +175,13 @@ app.post("/admin/users", requireAdmin, async (req, res) => {
   try {
     const { email, password, name, role } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: "email and password are required" });
+    const pwd = String(password);
+    if (pwd.length < 6 || pwd.length > 8) {
+      return res.status(400).json({ error: "Password must be 6-8 characters." });
+    }
+    if (!/^[A-Za-z0-9]+$/.test(pwd)) {
+      return res.status(400).json({ error: "Use letters and/or numbers only (no symbols)." });
+    }
     const resp = await supabaseAdminFetch(`admin/users`, {
       method: "POST",
       body: JSON.stringify({
@@ -252,8 +259,12 @@ app.post("/admin/users/:id/reset-password", requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { password } = req.body || {};
     if (!id || !password) return res.status(400).json({ error: "password is required" });
-    if (String(password).length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    const pwd = String(password);
+    if (pwd.length < 6 || pwd.length > 8) {
+      return res.status(400).json({ error: "Password must be 6-8 characters." });
+    }
+    if (!/^[A-Za-z0-9]+$/.test(pwd)) {
+      return res.status(400).json({ error: "Use letters and/or numbers only (no symbols)." });
     }
     const resp = await supabaseAdminFetch(`admin/users/${id}`, {
       method: "PUT",

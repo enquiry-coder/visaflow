@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useApp, useAuth, useTheme } from '@/src/hooks';
+import { isValidPassword, passwordError } from '@/src/lib/password';
 import { router } from 'expo-router';
 
 cssInterop(ShieldUserIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -187,7 +188,7 @@ export default function AdminScreen() {
         }
         await adminRequest('/admin/users', {
           method: 'POST',
-          body: JSON.stringify({ email: s.email, password: 'ChangeMe123!', name: s.name, role: s.role }),
+          body: JSON.stringify({ email: s.email, password: 'Temp1234', name: s.name, role: s.role }),
           token,
         });
         results.push(`created ${s.email}`);
@@ -327,7 +328,8 @@ export default function AdminScreen() {
     setError(null);
     setNotice(null);
     if (!email.trim()) return setError('Enter an email address.');
-    if (password.length < 8) return setError('Password must be at least 8 characters.');
+    const pwdError = passwordError(password);
+    if (pwdError) return setError(pwdError);
     createUser.mutate({ email: email.trim(), password, name: fullName.trim(), role });
   }, [email, password, fullName, role, createUser]);
 
@@ -466,7 +468,7 @@ export default function AdminScreen() {
               />
               <TextInput
                 className="bg-background rounded-xl px-4 py-3.5 border border-border text-foreground"
-                placeholder="Temporary password (8+ characters)"
+                placeholder="Temporary password (6-8 letters/numbers)"
                 placeholderTextColor="#8d9d9e"
                 secureTextEntry
                 value={password}
@@ -785,7 +787,7 @@ export default function AdminScreen() {
                       <Text className="text-xs font-semibold text-muted-foreground">Reset password</Text>
                       <TextInput
                         className="mt-2 bg-card rounded-xl px-3 py-2.5 border border-border text-foreground"
-                        placeholder="New password (8+ characters)"
+                        placeholder="New password (6-8 letters/numbers)"
                         placeholderTextColor="#8d9d9e"
                         secureTextEntry
                         value={resetPassword}
@@ -794,7 +796,7 @@ export default function AdminScreen() {
                       <View className="mt-2 flex-row gap-2">
                         <Pressable
                           onPress={() => resetUserPassword.mutate({ id: u.id, password: resetPassword })}
-                          disabled={resetUserPassword.isPending || resetPassword.length < 8}
+                          disabled={resetUserPassword.isPending || !isValidPassword(resetPassword)}
                           className="flex-1 items-center justify-center rounded-xl bg-primary py-2.5 active:scale-95"
                         >
                           {resetUserPassword.isPending ? (

@@ -6,6 +6,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApp } from '@/src/providers/AppProvider';
+import { saveRememberedEmail } from '@/src/lib/remember';
 
 export interface User {
   id: string;
@@ -51,6 +52,7 @@ export function useAuth() {
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       const { data, error } = await client.auth.signInWithPassword({ email, password });
       if (error) throw new AuthError(error.message, error.reason);
+      await saveRememberedEmail(email);
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: authKeys.session }),
