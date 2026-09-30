@@ -11,6 +11,28 @@ const SUFFIX: Record<DocKind, string> = {
 export type DocKind = 'passport' | 'address' | 'capture';
 
 /**
+ * Upload the already-stamped (burned-in MATCHED badge + timestamp) evidence PNG.
+ * Stored under `capture/{regNo}_STAMPED.png` so it is clearly the print-ready file
+ * and never overwrites the raw `_SC` screenshot.
+ */
+export async function uploadStampedCapture(
+  dataUrl: string,
+  regNo: string,
+): Promise<string> {
+  const blob = await uriToBlob(dataUrl);
+  const safeReg = regNo.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const path = `capture/${safeReg}_STAMPED.png`;
+  const { error } = await supabase.storage.from('client-docs').upload(path, blob, {
+    contentType: 'image/png',
+    cacheControl: '3600',
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from('client-docs').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/**
  * Upload a picked image (device URI or web blob/data URI) to the Supabase Storage
  * bucket `client-docs` and return the resulting PUBLIC url.
  *

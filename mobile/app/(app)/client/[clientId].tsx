@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,18 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeftIcon, MessageCircleIcon, ClipboardPasteIcon, CheckCircle2Icon, FileTextIcon, CameraIcon, CalendarClockIcon } from 'lucide-react-native';
+import { ArrowLeftIcon, MessageCircleIcon, ClipboardPasteIcon, CheckCircle2Icon, FileTextIcon, CameraIcon, CalendarClockIcon, XIcon, UserCheckIcon, ExternalLinkIcon, UploadIcon } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useApp, useAuth } from '@/src/hooks';
 import SalutationPicker from '@/components/SalutationPicker';
 import NationalityPicker from '@/components/NationalityPicker';
-import { uploadClientDoc } from '@/src/lib/upload';
+import { uploadClientDoc, uploadStampedCapture } from '@/src/lib/upload';
+import { stampCapture } from '@/src/lib/stampCapture';
 import { getStaffZoomLink, saveStaffZoomLink } from '@/src/lib/remember';
 
 // Resolve the hosted base URL for the client portal (same logic as the pipeline board).
@@ -36,6 +38,32 @@ cssInterop(CheckCircle2Icon, { className: { target: 'style', nativeStyleToProp: 
 cssInterop(FileTextIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(CameraIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(CalendarClockIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(XIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(UserCheckIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(ExternalLinkIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+cssInterop(UploadIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+
+/**
+ * Print the stamped evidence image (web only). Opens a hidden print-only window
+ * containing just the image, triggers the browser print dialog, then closes it.
+ * On native (no printing path here) it falls back to opening the image.
+ */
+function printImage(url: string, fileName: string): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    Linking.openURL(url);
+    return;
+  }
+  const w = window.open('', '_blank');
+  if (!w) {
+    window.open(url, '_blank');
+    return;
+  }
+  w.document.write(
+    `<html><head><title>${fileName}</title><style>html,body{margin:0;padding:0;height:100%}img{display:block;max-width:100%;max-height:100%;margin:auto}</style></head><body><img src="${url}" onload="setTimeout(function(){window.print()},300)" /></body></html>`,
+  );
+  w.document.close();
+  w.focus();
+}
 
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
@@ -48,6 +76,9 @@ export default function ClientDetailScreen() {
   const [confirmedTime, setConfirmedTime] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ label: string; url: string } | null>(null);
+  const [matchedSaving, setMatchedSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Pre-fill this staff user's Zoom link from the last time they entered one.
   useEffect(() => {
@@ -138,6 +169,70 @@ export default function ClientDetailScreen() {
   const markVerified = () => {
     update.mutate({ status: 'verified', completed_at: new Date().toISOString(), follow_up_due: false });
     setNotice('Marked Completed & Verified');
+  };
+
+  // Capture the client's Zoom screenshot as evidence and stamp a "matched" record.
+  // On web, the timestamp + MATCHED badge + staff/client are burned INTO the image
+  // pixels so the printed capture is self-contained evidence.
+  const markMatched = async () => {
+    if (!c) return;
+    if (!c.capture_url) {
+      setError('Paste or upload the client\'s Zoom screenshot first, then tap Matched.');
+      return;
+    }
+    const staffName = userFullName || user?.email || 'Staff';
+    const clientName = `${c.first_name} ${c.last_name}`.trim();
+    const matchedAt = new Date().toISOString();
+    setMatchedSaving(true);
+    try {
+      // Burn the stamp into the image pixels (web canvas only).
+      let stampedUrl: string | null = null;
+      if (Platform.OS === 'web') {
+        try {
+          const stampedDataUrl = await stampCapture(c.capture_url, {
+            matchedBy: staffName,
+            clientName,
+            regNo: c.reg_no,
+            matchedAt,
+          });
+          stampedUrl = await uploadStampedCapture(stampedDataUrl, c.reg_no);
+        } catch (stampErr: any) {
+          // Stamping is best-effort on the client; the matched record still saves.
+          console.warn('Could not burn stamp into image:', stampErr);
+        }
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        update.mutate(
+          { matched_at: matchedAt, matched_by: staffName, capture_stamped_url: stampedUrl },
+          { onSuccess: () => resolve(), onError: (e: any) => reject(e) },
+        );
+      });
+      setNotice(
+        stampedUrl
+          ? 'Matched — evidence image stamped with time + MATCHED badge (print-ready).'
+          : `Matched & saved as evidence by ${staffName}`,
+      );
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not save matched evidence');
+    } finally {
+      setMatchedSaving(false);
+    }
+  };
+
+  // Upload an image file (web) as the Zoom capture evidence.
+  const uploadCaptureFile = async (file: File) => {
+    if (!c) return;
+    setNotice('Uploading capture…');
+    try {
+      const uri = URL.createObjectURL(file);
+      const publicUrl = await uploadClientDoc(uri, 'capture', c.reg_no);
+      URL.revokeObjectURL(uri);
+      update.mutate({ capture_url: publicUrl });
+      setNotice('Capture saved — now tap "Matched" to record the evidence.');
+    } catch (e: any) {
+      setError(e?.message ?? 'Upload failed');
+    }
   };
 
   const saveProfile = () => {
@@ -277,10 +372,110 @@ export default function ClientDetailScreen() {
           )}
         </Section>
 
-        {/* Documents */}
-        <Section icon={<FileTextIcon className="text-muted-foreground" size={16} />} title="Uploaded ID Documents">
-          <View className="mt-2 gap-2">
-            <DocRow label="Passport Copy" url={c.passport_url} />
+        {/* Live Verification */}
+        <Section icon={<UserCheckIcon className="text-muted-foreground" size={16} />} title="Live Verification (during the Zoom meeting)">
+          <View className="mt-3 flex-col gap-3 md:flex-row">
+            {/* Left: submitted documents */}
+            <View className="flex-1 gap-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted documents</Text>
+              <DocThumb label="Passport Copy" url={c.passport_url} onPress={() => c.passport_url && setPreviewDoc({ label: 'Passport Copy', url: c.passport_url })} />
+              <DocThumb label="Address Proof" url={c.address_proof_url} onPress={() => c.address_proof_url && setPreviewDoc({ label: 'Address Proof', url: c.address_proof_url })} />
+              {docsComplete && !docsClear && (
+                <Text className="text-[11px] text-accent-foreground">Review both documents for clarity below.</Text>
+              )}
+            </View>
+
+            {/* Right: live capture + matched action */}
+            <View className="flex-1 gap-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client live capture</Text>
+              <View className="rounded-xl bg-card border border-border overflow-hidden">
+                {(c.capture_stamped_url || c.capture_url) ? (
+                  <Pressable onPress={() => setPreviewDoc({ label: c.capture_stamped_url ? 'Matched Evidence (stamped)' : 'Live Zoom Capture', url: (c.capture_stamped_url || c.capture_url)! })}>
+                    <Image source={{ uri: (c.capture_stamped_url || c.capture_url)! }} style={{ width: '100%', height: 180 }} resizeMode="contain" />
+                    {c.capture_stamped_url ? (
+                      <View className="absolute top-2 right-2 rounded-md bg-chart-2 px-2 py-0.5">
+                        <Text className="text-[10px] font-bold text-white">STAMPED</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ) : (
+                  <View className="h-[180px] items-center justify-center gap-2 px-4">
+                    <CameraIcon className="text-muted-foreground" size={28} />
+                    <Text className="text-center text-xs text-muted-foreground">
+                      Take a Zoom screenshot (Win+Shift+S), then paste it here with Ctrl+V.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="flex-row gap-2">
+                <Pressable onPress={pasteCapture} className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-secondary py-2.5 active:scale-[0.97]">
+                  <ClipboardPasteIcon className="text-secondary-foreground" size={15} />
+                  <Text className="text-xs font-semibold text-secondary-foreground">Paste (Ctrl+V)</Text>
+                </Pressable>
+                <Pressable onPress={() => fileInputRef.current?.click()} className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-secondary py-2.5 active:scale-[0.97]">
+                  <UploadIcon className="text-secondary-foreground" size={15} />
+                  <Text className="text-xs font-semibold text-secondary-foreground">Upload</Text>
+                </Pressable>
+              </View>
+              {Platform.OS === 'web' && (
+                <input
+                  ref={fileInputRef as any}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadCaptureFile(file);
+                    e.target.value = '';
+                  }}
+                />
+              )}
+
+              <Pressable
+                onPress={markMatched}
+                disabled={matchedSaving}
+                className={`flex-row items-center justify-center gap-2 rounded-xl py-3 active:scale-[0.97] ${c.capture_url ? 'bg-primary' : 'bg-muted'}`}
+              >
+                {matchedSaving ? (
+                  <ActivityIndicator size="small" color={c.capture_url ? '#fff' : '#6b7280'} />
+                ) : (
+                  <UserCheckIcon className={c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'} size={18} />
+                )}
+                <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>Matched — save as evidence</Text>
+              </Pressable>
+
+              {c.matched_at ? (
+                <View className="rounded-xl bg-chart-2/10 p-3 gap-2">
+                  <Text className="text-xs font-semibold text-chart-2">✓ Matched</Text>
+                  <Text className="text-[11px] text-muted-foreground">
+                    {c.matched_by ?? 'Staff'} · {new Date(c.matched_at).toLocaleString()} (Hong Kong time, UTC+8)
+                  </Text>
+                  {c.capture_stamped_url ? (
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        onPress={() => printImage(c.capture_stamped_url!, `${c.first_name}_${c.last_name}_matched_evidence`)}
+                        className="flex-1 flex-row items-center justify-center gap-1.5 rounded-lg bg-primary py-2 active:scale-[0.97]"
+                      >
+                        <ExternalLinkIcon className="text-primary-foreground" size={14} />
+                        <Text className="text-xs font-semibold text-primary-foreground">Print stamped image</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => (Platform.OS === 'web' ? (window.open(c.capture_stamped_url, '_blank') as any) : Linking.openURL(c.capture_stamped_url!))}
+                        className="flex-row items-center justify-center gap-1.5 rounded-lg bg-background px-3 py-2 active:scale-[0.97]"
+                      >
+                        <ExternalLinkIcon className="text-foreground" size={14} />
+                        <Text className="text-xs font-semibold text-foreground">Open</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Clarity review */}
+          <View className="mt-3 gap-2">
             {c.passport_url && (
               <ClarityReview
                 kind="passport"
@@ -289,7 +484,6 @@ export default function ClientDetailScreen() {
                 onReupload={() => sendReuploadLink('passport')}
               />
             )}
-            <DocRow label="Address Proof" url={c.address_proof_url} />
             {c.address_proof_url && (
               <ClarityReview
                 kind="address"
@@ -298,15 +492,7 @@ export default function ClientDetailScreen() {
                 onReupload={() => sendReuploadLink('address')}
               />
             )}
-            <DocRow label="Live Zoom Capture" url={c.capture_url} camera />
           </View>
-          {docsComplete && !docsClear && (
-            <View className="mt-3 rounded-xl bg-accent/15 border border-accent/30 p-3">
-              <Text className="text-xs font-semibold text-accent-foreground">
-                Review both documents for clarity before confirming the appointment time.
-              </Text>
-            </View>
-          )}
         </Section>
 
         {/* Staff actions */}
@@ -385,6 +571,36 @@ export default function ClientDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Full-screen document preview modal */}
+      <Modal visible={!!previewDoc} transparent animationType="fade" onRequestClose={() => setPreviewDoc(null)}>
+        <View className="flex-1 bg-black/90 items-center justify-center px-4">
+          <View className="w-full max-w-3xl rounded-2xl bg-card overflow-hidden">
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
+              <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>{previewDoc?.label}</Text>
+              <Pressable onPress={() => setPreviewDoc(null)} className="w-8 h-8 rounded-full bg-muted items-center justify-center active:scale-95">
+                <XIcon className="text-foreground" size={18} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 16 }} style={{ maxHeight: '80%' as any }}>
+              <Image
+                source={{ uri: previewDoc?.url ?? '' }}
+                style={{ width: '100%', height: 480 }}
+                resizeMode="contain"
+              />
+            </ScrollView>
+            <View className="px-4 py-3 border-t border-border">
+              <Pressable
+                onPress={() => previewDoc?.url && (Platform.OS === 'web' ? (window.open(previewDoc.url, '_blank') as any) : Linking.openURL(previewDoc.url))}
+                className="flex-row items-center justify-center gap-2 rounded-xl bg-secondary py-2.5 active:scale-[0.97]"
+              >
+                <ExternalLinkIcon className="text-secondary-foreground" size={16} />
+                <Text className="text-sm font-semibold text-secondary-foreground">Open full image in browser</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -438,24 +654,26 @@ function ClarityReview({ kind, clarity, onSet, onReupload }: {
   );
 }
 
-function DocRow({ label, url, camera }: { label: string; url?: string | null; camera?: boolean }) {
-  return (
-    <View className="flex-row items-center gap-3 rounded-xl bg-card p-3">
-      <View className="w-12 h-12 rounded-lg bg-muted items-center justify-center overflow-hidden">
-        {url ? (
-          <Image source={{ uri: url }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-        ) : camera ? (
-          <CameraIcon className="text-muted-foreground" size={20} />
-        ) : (
-          <FileTextIcon className="text-muted-foreground" size={20} />
-        )}
-      </View>
-      <View className="flex-1">
-        <Text className="text-sm font-semibold text-foreground">{label}</Text>
-        <Text className={`text-xs ${url ? 'text-chart-2' : 'text-muted-foreground'}`}>
-          {url ? 'Uploaded — hi-res preview available' : 'Not uploaded yet'}
-        </Text>
-      </View>
+function DocThumb({ label, url, onPress }: { label: string; url?: string | null; onPress?: () => void }) {
+  const content = url ? (
+    <Image source={{ uri: url }} style={{ width: '100%', height: 140 }} resizeMode="contain" />
+  ) : (
+    <View className="h-[140px] items-center justify-center">
+      <FileTextIcon className="text-muted-foreground" size={22} />
+      <Text className="mt-1 text-xs text-muted-foreground">Not uploaded yet</Text>
     </View>
+  );
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!url}
+      className="rounded-xl bg-card border border-border overflow-hidden"
+    >
+      {content}
+      <View className="flex-row items-center justify-between px-3 py-2 border-t border-border">
+        <Text className="text-xs font-semibold text-foreground">{label}</Text>
+        {url ? <Text className="text-[11px] text-primary">Tap to enlarge</Text> : null}
+      </View>
+    </Pressable>
   );
 }

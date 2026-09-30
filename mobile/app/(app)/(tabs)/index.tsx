@@ -53,6 +53,12 @@ export default function PipelineScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportMonth, setExportMonth] = useState<string | null>(null);
+
+  const changeStage = (next: string | null) => {
+    setStageFilter(next);
+    if (next !== 'completed') setExportMonth(null);
+  };
 
   // staff see only their own clients; supervisor/admin see everything.
   const canSeeAll = userRole !== 'staff';
@@ -152,21 +158,60 @@ export default function PipelineScreen() {
     setRefreshing(false);
   };
 
-  // Export the CURRENTLY selected category (or all clients when no filter).
-  const rowsToExport = useMemo(() => {
-    const all = clients ?? [];
-    if (stageFilter && stageFilter !== 'all') {
-      return all.filter((c) => stageOf(c) === stageFilter);
+  // Mutable grouping of completed cases into calendar months (for retrieval).
+  const completedMonths = useMemo(() => {
+    if (stageFilter !== 'completed') return [];
+    const months = new Map<string, { key: string; label: string }>();
+    for (const c of clients ?? []) {
+      if (c.status !== 'verified') continue;
+      const date = c.completed_at ?? c.submitted_at ?? c.created_at;
+      if (!date) continue;
+      const d = new Date(date);
+      if (isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!months.has(key)) {
+        months.set(key, {
+          key,
+          label: `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`,
+        });
+      }
     }
-    return all.filter((c) => c.status !== 'suspended');
+    return [...months.values()].sort((a, b) => (a.key < b.key ? 1 : -1));
   }, [clients, stageFilter]);
 
+  // Export the CURRENTLY selected category (or all clients when no filter),
+  // optionally narrowed to one completed month.
+  const rowsToExport = useMemo(() => {
+    const all = clients ?? [];
+    const inScope = (stageFilter && stageFilter !== 'all')
+      ? all.filter((c) => stageOf(c) === stageFilter)
+      : all.filter((c) => c.status !== 'suspended');
+    if (stageFilter === 'completed' && exportMonth) {
+      const chosen = exportMonth.split('-'); // YYYY-MM
+      const yy = Number(chosen[0]);
+      const mm = Number(chosen[1]);
+      return inScope.filter((c) => {
+        const date = c.completed_at ?? c.submitted_at ?? c.created_at;
+        if (!date) return false;
+        const d = new Date(date);
+        return d.getFullYear() === yy && d.getMonth() + 1 === mm;
+      });
+    }
+    return inScope;
+  }, [clients, stageFilter, exportMonth]);
+
   const exportLabel = useMemo(() => {
+    if (stageFilter === 'completed') {
+      const monthLabel = exportMonth
+        ? completedMonths.find((m) => m.key === exportMonth)?.label ?? exportMonth
+        : 'All Completed';
+      return `Completed${exportMonth ? ' — ' + monthLabel : ''}`;
+    }
     if (stageFilter && stageFilter !== 'all') {
       return STAGES.find((s) => s.key === stageFilter)?.label ?? 'Clients';
     }
     return 'All Clients';
-  }, [stageFilter]);
+  }, [stageFilter, exportMonth, completedMonths]);
 
   const onExport = async () => {
     if (rowsToExport.length === 0) {
@@ -178,7 +223,8 @@ export default function PipelineScreen() {
       const headers = [
         'Serial No', 'Salutation', 'First Name', 'Last Name', 'Nationality',
         'Country Code', 'Phone Number', 'Handling Staff', 'Stage',
-        'Passport File', 'Address Proof File', 'Zoom Capture File',
+        'Passport File', 'Passport URL', 'Address Proof File', 'Address Proof URL',
+        'Zoom Capture File', 'Zoom Capture URL', 'Stamped Evidence URL',
         'Preferred Date', 'Preferred Time', 'Confirmed Date', 'Confirmed Time',
         'Invited At', 'Responded At', 'Completed At',
       ];
@@ -193,8 +239,12 @@ export default function PipelineScreen() {
         'Handling Staff': c.handling_staff ?? '',
         'Stage': STAGES.find((s) => s.key === stageOf(c))?.label ?? '',
         'Passport File': docRef(c.reg_no, 'passport', c.passport_url),
+        'Passport URL': c.passport_url ?? '',
         'Address Proof File': docRef(c.reg_no, 'address', c.address_proof_url),
+        'Address Proof URL': c.address_proof_url ?? '',
         'Zoom Capture File': docRef(c.reg_no, 'capture', c.capture_url),
+        'Zoom Capture URL': c.capture_url ?? '',
+        'Stamped Evidence URL': c.capture_stamped_url ?? '',
         'Preferred Date': c.preferred_date ?? '',
         'Preferred Time': c.preferred_time ?? '',
         'Confirmed Date': c.confirmed_date ?? '',
@@ -264,7 +314,7 @@ export default function PipelineScreen() {
         <View className="mt-5 gap-2 px-5">
           <View className="flex-row gap-2">
             <Pressable
-              onPress={() => setStageFilter(stageFilter === 'all' ? null : 'all')}
+              onPress={() => changeStage(stageFilter === 'all' ? null : 'all')}
               className={`flex-1 rounded-2xl p-3 ${stageFilter === 'all' ? 'bg-primary' : 'bg-card'}`}
             >
               <Text className={`text-2xl font-bold ${stageFilter === 'all' ? 'text-primary-foreground' : 'text-foreground'}`}>
@@ -279,7 +329,7 @@ export default function PipelineScreen() {
               return (
                 <Pressable
                   key={s.key}
-                  onPress={() => setStageFilter(selected ? null : s.key)}
+                  onPress={() => changeStage(selected ? null : s.key)}
                   className={`flex-1 rounded-2xl p-3 ${selected ? 'bg-primary' : 'bg-card'}`}
                 >
                   <Text className={`text-2xl font-bold ${selected ? 'text-primary-foreground' : 'text-foreground'}`}>
@@ -293,7 +343,7 @@ export default function PipelineScreen() {
             })}
           </View>
           {stageFilter && stageFilter !== 'all' && (
-            <Pressable onPress={() => setStageFilter(null)} className="self-start flex-row items-center gap-1 rounded-full bg-secondary px-3 py-1.5">
+            <Pressable onPress={() => changeStage(null)} className="self-start flex-row items-center gap-1 rounded-full bg-secondary px-3 py-1.5">
               <Text className="text-xs font-semibold text-secondary-foreground">✕ Clear filter</Text>
             </Pressable>
           )}
@@ -367,6 +417,41 @@ export default function PipelineScreen() {
               <Text className="text-lg font-semibold text-foreground">Completed clients</Text>
               <Text className="text-xs font-semibold text-chart-2">{completed.length} completed</Text>
             </View>
+
+            {/* Monthly retrieval — group completed cases by calendar month */}
+            {stageFilter === 'completed' && completedMonths.length > 0 && (
+              <View className="mt-3 px-5">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Export by month for retrieval
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+                  className="mt-2"
+                >
+                  <Pressable
+                    onPress={() => setExportMonth(null)}
+                    className={`rounded-full px-3 py-1.5 ${exportMonth === null ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <Text className={`text-xs font-semibold ${exportMonth === null ? 'text-primary-foreground' : 'text-foreground'}`}>
+                      All months
+                    </Text>
+                  </Pressable>
+                  {completedMonths.map((m) => (
+                    <Pressable
+                      key={m.key}
+                      onPress={() => setExportMonth(exportMonth === m.key ? null : m.key)}
+                      className={`rounded-full px-3 py-1.5 ${exportMonth === m.key ? 'bg-primary' : 'bg-muted'}`}
+                    >
+                      <Text className={`text-xs font-semibold ${exportMonth === m.key ? 'text-primary-foreground' : 'text-foreground'}`}>
+                        {m.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <View className="mt-3 px-5 gap-3">
               {completed.map((c) => (
                 <ClientCard key={c.id} c={c} onPress={() => router.push('/client/' + c.id)} />

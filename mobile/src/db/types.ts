@@ -42,6 +42,9 @@ export interface Database {
           address_clarity: string | null;
           docs_verified_at: string | null;
           staff_user_id: string | null;
+          matched_at: string | null;
+          matched_by: string | null;
+          capture_stamped_url: string | null;
         };
         Insert: {
           id: string;
@@ -74,6 +77,9 @@ export interface Database {
           address_clarity?: string | null;
           docs_verified_at?: string | null;
           staff_user_id?: string | null;
+          matched_at?: string | null;
+          matched_by?: string | null;
+          capture_stamped_url?: string | null;
         };
         Update: {
           id?: string;
@@ -106,6 +112,9 @@ export interface Database {
           address_clarity?: string | null;
           docs_verified_at?: string | null;
           staff_user_id?: string | null;
+          matched_at?: string | null;
+          matched_by?: string | null;
+          capture_stamped_url?: string | null;
         };
       };
     };
