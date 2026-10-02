@@ -90,13 +90,16 @@ export default function PipelineScreen() {
   });
 
   const sendWhatsApp = useMutation({
-    mutationFn: async (c: { id: string; salutation: string | null; first_name: string; last_name: string; reg_no: string; phone: string }) => {
+    mutationFn: async (input: { id: string; salutation: string | null; first_name: string; last_name: string; reg_no: string; phone: string; kind: 'invite' | 'reminder' }) => {
+      const c = input;
       // Public portal link — the client opens this in any browser, no app download needed.
       const portalUrl = `${getPortalBase()}/portal/${c.reg_no}`;
       const salutation = c.salutation ? `${c.salutation} ` : '';
       const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
       const staffName = userFullName || 'our team';
-      const msg = `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker regarding your application by Trust (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
+      const msg = c.kind === 'reminder'
+        ? `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker. If you have not responded to our earlier message, please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`
+        : `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker regarding your application by Trust (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
       // Open WhatsApp (native app on mobile, wa.me in a new tab on web) with the message pre-filled.
       const phone = (c.phone || '').replace(/\D/g, '');
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
@@ -393,7 +396,7 @@ export default function PipelineScreen() {
         ) : (
           <View className="mt-3 px-5 gap-3">
             {active.map((c) => (
-              <ClientCard key={c.id} c={c} overdue={overdue.some((o) => o.id === c.id)} onPress={() => router.push('/client/' + c.id)} onWhatsApp={() => sendWhatsApp.mutate(c)} onSuspend={() => suspendClient.mutate({ id: c.id, suspend: true })} />
+              <ClientCard key={c.id} c={c} overdue={overdue.some((o) => o.id === c.id)} onPress={() => router.push('/client/' + c.id)} onWhatsApp={(kind) => sendWhatsApp.mutate({ ...c, kind })} onSuspend={() => suspendClient.mutate({ id: c.id, suspend: true })} />
             ))}
           </View>
         )}
@@ -498,7 +501,7 @@ type ClientRow = {
   invited_at: string | null;
 };
 
-function ClientCard({ c, onPress, onWhatsApp, overdue, onSuspend, onReinstate, suspended }: { c: ClientRow; onPress: () => void; onWhatsApp?: () => void; overdue?: boolean; onSuspend?: () => void; onReinstate?: () => void; suspended?: boolean }) {
+function ClientCard({ c, onPress, onWhatsApp, overdue, onSuspend, onReinstate, suspended }: { c: ClientRow; onPress: () => void; onWhatsApp?: (kind: 'invite' | 'reminder') => void; overdue?: boolean; onSuspend?: () => void; onReinstate?: () => void; suspended?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
@@ -554,11 +557,19 @@ function ClientCard({ c, onPress, onWhatsApp, overdue, onSuspend, onReinstate, s
         </Pressable>
       ) : onWhatsApp && !c.invited_at ? (
         <Pressable
-          onPress={onWhatsApp}
+          onPress={() => onWhatsApp('invite')}
           className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-[#25D366] py-2.5 active:scale-[0.97]"
         >
           <MessageCircleIcon className="text-white" size={16} />
           <Text className="text-sm font-semibold text-white">Send WhatsApp</Text>
+        </Pressable>
+      ) : onWhatsApp && c.invited_at && !c.submitted_at ? (
+        <Pressable
+          onPress={() => onWhatsApp('reminder')}
+          className="mt-3 flex-row items-center justify-center gap-2 rounded-xl border border-[#25D366] bg-[#25D366]/10 py-2.5 active:scale-[0.97]"
+        >
+          <MessageCircleIcon className="text-[#25D366]" size={16} />
+          <Text className="text-sm font-semibold text-[#25D366]">Send reminder</Text>
         </Pressable>
       ) : c.status === 'appt_set' && !c.zoom_link ? (
         <Pressable
