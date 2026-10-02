@@ -137,23 +137,57 @@ export default function ClientDetailScreen() {
     }
   };
 
+  // Shared upload path: take an image File and store it as the Zoom capture.
+  const processClipboardFile = async (file: File) => {
+    if (!c) return;
+    setNotice('Uploading capture…');
+    try {
+      const url = URL.createObjectURL(file);
+      const publicUrl = await uploadClientDoc(url, 'capture', c.reg_no);
+      URL.revokeObjectURL(url);
+      update.mutate({ capture_url: publicUrl });
+      setNotice(`Capture saved as ${c.reg_no}_SC.png — mark Verified below`);
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not upload pasted image');
+    }
+  };
+
+  // Global web listener so pressing Ctrl+V directly pastes the screenshot —
+  // no need to click the button. The browser fires a `paste` event with the
+  // image inside event.clipboardData.items, which is more reliable than the
+  // async navigator.clipboard.read() API.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            processClipboardFile(file);
+          }
+          break;
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [c?.id]);
+
   const pasteCapture = async () => {
     if (!c) return;
     if (Platform.OS === 'web') {
-      // Web: use the Clipboard API to read an image/text
+      // Button fallback: use the Clipboard API to read an image.
       if (typeof navigator !== 'undefined' && navigator.clipboard?.read) {
         try {
           const items = await navigator.clipboard.read();
           const img = items.find((i) => i.types.includes('image/png'));
           if (img) {
             const blob = await img.getType('image/png');
-            // Upload to Storage named by serial no. + SC so it's permanent & retrievable.
-            const url = URL.createObjectURL(blob);
-            setNotice('Uploading capture…');
-            const publicUrl = await uploadClientDoc(url, 'capture', c.reg_no);
-            URL.revokeObjectURL(url);
-            update.mutate({ capture_url: publicUrl });
-            setNotice(`Capture saved as ${c.reg_no}_SC.png — mark Verified below`);
+            await processClipboardFile(new File([blob], 'capture.png', { type: 'image/png' }));
           } else {
             setError('No image found in clipboard — use Win+Shift+S then Ctrl+V');
           }
@@ -389,10 +423,20 @@ export default function ClientDetailScreen() {
 
         {/* Live Verification */}
         <Section icon={<UserCheckIcon className="text-muted-foreground" size={16} />} title="Live Verification (during the Zoom meeting)">
+          {/* Step checklist — complete these in order 1→5 to finish the interview */}
+          <View className="mt-3 rounded-xl bg-background border border-border p-3 gap-1.5">
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Complete in order</Text>
+            <StepRow done={!!c.passport_url && !!c.address_proof_url} num={1} label="Documents uploaded" />
+            <StepRow done={docsClear} num={2} label="Documents marked Clear" />
+            <StepRow done={!!c.capture_url} num={3} label="Live face captured" />
+            <StepRow done={c.face_match === 'yes'} num={4} label="Face matches passport photo" />
+            <StepRow done={!!c.matched_at} num={5} label="Matched & stamped (timestamp burned in)" />
+          </View>
+
           <View className="mt-3 flex-col gap-3 md:flex-row">
             {/* Left: submitted documents */}
             <View className="flex-1 gap-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted documents</Text>
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">① Submit documents · ② Review clarity</Text>
               <DocThumb label="Passport Copy" url={c.passport_url} onPress={() => c.passport_url && setPreviewDoc({ label: 'Passport Copy', url: c.passport_url })} />
               <DocThumb label="Address Proof" url={c.address_proof_url} onPress={() => c.address_proof_url && setPreviewDoc({ label: 'Address Proof', url: c.address_proof_url })} />
               {docsComplete && !docsClear && (
@@ -402,7 +446,7 @@ export default function ClientDetailScreen() {
 
             {/* Right: live capture + matched action */}
             <View className="flex-1 gap-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client live face capture (liveness)</Text>
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">③ Capture the client's live face</Text>
               <View className="rounded-xl bg-card border border-border overflow-hidden">
                 {(c.capture_stamped_url || c.capture_url) ? (
                   <Pressable onPress={() => setPreviewDoc({ label: c.capture_stamped_url ? 'Matched Evidence (stamped)' : 'Live Zoom Capture', url: (c.capture_stamped_url || c.capture_url)! })}>
@@ -457,12 +501,12 @@ export default function ClientDetailScreen() {
                 ) : (
                   <UserCheckIcon className={c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'} size={18} />
                 )}
-                <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>Matched — save as evidence</Text>
+                <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>⑤ Matched — save as evidence (timestamp burned in)</Text>
               </Pressable>
 
               {/* Face-match proof-of-work: does the live client match the passport photo? */}
               <View className="rounded-xl bg-background border border-border p-3 gap-2">
-                <Text className="text-xs font-semibold text-foreground">Matches passport photo?</Text>
+                <Text className="text-xs font-semibold text-foreground">④ Confirm the live client matches the passport photo</Text>
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={() => markFaceMatch('yes')}
@@ -689,6 +733,21 @@ function ClarityReview({ kind, clarity, onSet, onReupload }: {
           <Text className="text-xs font-semibold text-white">Send re-upload link</Text>
         </Pressable>
       )}
+    </View>
+  );
+}
+
+function StepRow({ num, label, done }: { num: number; label: string; done: boolean }) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <View className={`w-5 h-5 rounded-full items-center justify-center ${done ? 'bg-chart-2' : 'bg-muted'}`}>
+        {done ? (
+          <Text className="text-[11px] font-bold text-white">✓</Text>
+        ) : (
+          <Text className="text-[11px] font-bold text-muted-foreground">{num}</Text>
+        )}
+      </View>
+      <Text className={`text-xs ${done ? 'text-foreground line-through' : 'text-muted-foreground'}`}>{label}</Text>
     </View>
   );
 }
