@@ -125,7 +125,9 @@ export default function ClientDetailScreen() {
       confirmed_time: confirmedTime.trim() || c.confirmed_time || null,
       confirmed_date: c.preferred_date || null,
     });
-    const msg = `Thanks ${c.first_name}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime} (Hong Kong time, UTC+8)` : ''}. Here is your meeting link: ${link}`;
+    const sal = c.salutation ? `${c.salutation} ` : '';
+    const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
+    const msg = `Thanks ${sal}${fullName}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime} (Hong Kong time, UTC+8)` : ''}. Here is your meeting link: ${link}`;
     const phone = (c.phone || '').replace(/\D/g, '');
     try {
       await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);

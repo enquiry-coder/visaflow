@@ -45,6 +45,7 @@ export interface Database {
           matched_at: string | null;
           matched_by: string | null;
           capture_stamped_url: string | null;
+          last_reminder_at: string | null;
         };
         Insert: {
           id: string;
@@ -80,6 +81,7 @@ export interface Database {
           matched_at?: string | null;
           matched_by?: string | null;
           capture_stamped_url?: string | null;
+          last_reminder_at?: string | null;
         };
         Update: {
           id?: string;
@@ -115,6 +117,7 @@ export interface Database {
           matched_at?: string | null;
           matched_by?: string | null;
           capture_stamped_url?: string | null;
+          last_reminder_at?: string | null;
         };
       };
     };
