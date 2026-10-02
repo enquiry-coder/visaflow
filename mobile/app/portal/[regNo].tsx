@@ -14,17 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraIcon, FileTextIcon, CalendarClockIcon, SendIcon, CheckCircle2Icon } from 'lucide-react-native';
+import { CameraIcon, CalendarClockIcon, SendIcon, CheckCircle2Icon } from 'lucide-react-native';
 import { cssInterop } from 'nativewind';
 import { useApp } from '@/src/hooks';
 import { uploadClientDoc } from '@/src/lib/upload';
-import SalutationPicker from '@/components/SalutationPicker';
-import NationalityPicker from '@/components/NationalityPicker';
 import { buildCalendarEvent, openInCalendar, OFFICE_TIME_ZONE_LABEL } from '@/src/lib/calendar';
 import CalendarPicker from '@/components/CalendarPicker';
 
 cssInterop(CameraIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
-cssInterop(FileTextIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(CalendarClockIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(SendIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(CheckCircle2Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -37,8 +34,6 @@ export default function ClientPortalScreen() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState('');
   const [time, setTime] = useState<string | null>(null);
-  const [salutation, setSalutation] = useState('');
-  const [nationality, setNationality] = useState('');
   const [passport, setPassport] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [uploading, setUploading] = useState<'passport' | 'address' | null>(null);
@@ -62,8 +57,6 @@ export default function ClientPortalScreen() {
       const { error } = await client
         .from('clients')
         .update({
-          salutation: salutation.trim() || null,
-          nationality: nationality.trim() || null,
           preferred_date: date || null,
           preferred_time: time,
           passport_url: passport,
@@ -321,26 +314,6 @@ export default function ClientPortalScreen() {
               <Text className="text-sm text-destructive">{error}</Text>
             </View>
           )}
-
-          {/* Identity */}
-          <View className="mx-5 rounded-3xl bg-card p-5">
-            <View className="flex-row items-center gap-2">
-              <FileTextIcon className="text-primary" size={18} />
-              <Text className="text-base font-semibold text-foreground">Your Details</Text>
-            </View>
-            <View className="mt-3 flex-row gap-2">
-              <SalutationPicker
-                value={salutation}
-                onChange={setSalutation}
-                containerClassName="w-20"
-              />
-              <NationalityPicker
-                value={nationality}
-                onChange={setNationality}
-                containerClassName="flex-1"
-              />
-            </View>
-          </View>
 
           {/* Date */}
           <View className="mx-5 mt-4 rounded-3xl bg-card p-5">
