@@ -242,6 +242,19 @@ export default function ClientDetailScreen() {
     setNotice('Profile updated');
   };
 
+  // Record the staff's affirmative "does the live client match the passport photo?"
+  // decision as proof-of-work. yes/no + timestamp are persisted so the ID check is
+  // auditable evidence, not just an unrecorded human judgment.
+  const markFaceMatch = (result: 'yes' | 'no') => {
+    if (!c) return;
+    update.mutate({ face_match: result, face_match_at: new Date().toISOString() });
+    setNotice(
+      result === 'yes'
+        ? 'Face match confirmed — saved as proof of ID verification.'
+        : 'Face match marked "No" — flagged for review.',
+    );
+  };
+
   const setClarity = (kind: 'passport' | 'address', clarity: 'ok' | 'unclear') => {
     if (!c) return;
     const patch: Record<string, unknown> = kind === 'passport' ? { passport_clarity: clarity } : { address_clarity: clarity };
@@ -389,7 +402,7 @@ export default function ClientDetailScreen() {
 
             {/* Right: live capture + matched action */}
             <View className="flex-1 gap-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client live capture</Text>
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client live face capture (liveness)</Text>
               <View className="rounded-xl bg-card border border-border overflow-hidden">
                 {(c.capture_stamped_url || c.capture_url) ? (
                   <Pressable onPress={() => setPreviewDoc({ label: c.capture_stamped_url ? 'Matched Evidence (stamped)' : 'Live Zoom Capture', url: (c.capture_stamped_url || c.capture_url)! })}>
@@ -404,7 +417,7 @@ export default function ClientDetailScreen() {
                   <View className="h-[180px] items-center justify-center gap-2 px-4">
                     <CameraIcon className="text-muted-foreground" size={28} />
                     <Text className="text-center text-xs text-muted-foreground">
-                      Take a Zoom screenshot (Win+Shift+S), then paste it here with Ctrl+V.
+                      Take a Zoom screenshot of the client's face (Win+Shift+S), then paste it here with Ctrl+V.
                     </Text>
                   </View>
                 )}
@@ -446,6 +459,30 @@ export default function ClientDetailScreen() {
                 )}
                 <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>Matched — save as evidence</Text>
               </Pressable>
+
+              {/* Face-match proof-of-work: does the live client match the passport photo? */}
+              <View className="rounded-xl bg-background border border-border p-3 gap-2">
+                <Text className="text-xs font-semibold text-foreground">Matches passport photo?</Text>
+                <View className="flex-row gap-2">
+                  <Pressable
+                    onPress={() => markFaceMatch('yes')}
+                    className={`flex-1 items-center rounded-lg py-2 ${c.face_match === 'yes' ? 'bg-chart-2' : 'bg-card'}`}
+                  >
+                    <Text className={`text-xs font-semibold ${c.face_match === 'yes' ? 'text-white' : 'text-foreground'}`}>✓ Yes</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => markFaceMatch('no')}
+                    className={`flex-1 items-center rounded-lg py-2 ${c.face_match === 'no' ? 'bg-accent' : 'bg-card'}`}
+                  >
+                    <Text className={`text-xs font-semibold ${c.face_match === 'no' ? 'text-accent-foreground' : 'text-foreground'}`}>✕ No</Text>
+                  </Pressable>
+                </View>
+                {c.face_match && (
+                  <Text className="text-[11px] text-muted-foreground">
+                    Recorded by {c.matched_by ?? 'Staff'} · {new Date(c.face_match_at ?? Date.now()).toLocaleString()} (Hong Kong time, UTC+8)
+                  </Text>
+                )}
+              </View>
 
               {c.matched_at ? (
                 <View className="rounded-xl bg-chart-2/10 p-3 gap-2">

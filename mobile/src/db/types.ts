@@ -46,6 +46,8 @@ export interface Database {
           matched_by: string | null;
           capture_stamped_url: string | null;
           last_reminder_at: string | null;
+          face_match: string | null;
+          face_match_at: string | null;
         };
         Insert: {
           id: string;
@@ -82,6 +84,8 @@ export interface Database {
           matched_by?: string | null;
           capture_stamped_url?: string | null;
           last_reminder_at?: string | null;
+          face_match?: string | null;
+          face_match_at?: string | null;
         };
         Update: {
           id?: string;
@@ -118,6 +122,8 @@ export interface Database {
           matched_by?: string | null;
           capture_stamped_url?: string | null;
           last_reminder_at?: string | null;
+          face_match?: string | null;
+          face_match_at?: string | null;
         };
       };
     };
