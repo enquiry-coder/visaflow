@@ -17,6 +17,20 @@ import { MessageCircleIcon, ChevronRightIcon, CameraIcon, FileTextIcon, Calendar
 import { cssInterop } from 'nativewind';
 import { useApp, useAuth } from '@/src/hooks';
 import { downloadCsv, docRef } from '@/src/lib/export';
+import { formatInTimeZone } from 'date-fns-tz';
+import { OFFICE_TIME_ZONE } from '@/src/lib/calendar';
+
+// Render an ISO timestamp as a short "HK wall-clock" string for the card, e.g.
+// "13 Oct, 10:30 AM". Always fixed to the office zone so it reads the same for
+// every staff member regardless of their device timezone.
+function hkStamp(iso: string | null | undefined): string {
+  if (!iso) return '';
+  try {
+    return formatInTimeZone(iso, OFFICE_TIME_ZONE, 'd MMM, h:mm a');
+  } catch {
+    return '';
+  }
+}
 
 cssInterop(MessageCircleIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(ChevronRightIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -104,10 +118,17 @@ export default function PipelineScreen() {
       const phone = (c.phone || '').replace(/\D/g, '');
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
       await Linking.openURL(url);
-      // Record the invitation so the client moves into "Invited-Not Responded".
+      // Record the outreach with a timestamp. The first invite stamps `invited_at`
+      // (so the client moves into "Invited-Not Responded"); each reminder stamps
+      // `last_reminder_at` separately so staff can see when they last followed up,
+      // WITHOUT losing the original first-invite time.
+      const now = new Date().toISOString();
+      const patch = c.kind === 'reminder'
+        ? { last_reminder_at: now }
+        : { invited_at: now, last_reminder_at: null };
       const { error } = await client
         .from('clients')
-        .update({ invited_at: new Date().toISOString() })
+        .update(patch)
         .eq('id', c.id);
       if (error) throw error;
       return msg;
@@ -232,7 +253,7 @@ export default function PipelineScreen() {
         'Passport File', 'Passport URL', 'Address Proof File', 'Address Proof URL',
         'Zoom Capture File', 'Zoom Capture URL', 'Stamped Evidence URL',
         'Preferred Date', 'Preferred Time', 'Confirmed Date', 'Confirmed Time',
-        'Invited At', 'Responded At', 'Completed At',
+        'Invited At', 'Last Reminder At', 'Responded At', 'Completed At',
       ];
       const rows = rowsToExport.map((c: any) => ({
         'Serial No': c.reg_no ?? '',
@@ -256,6 +277,7 @@ export default function PipelineScreen() {
         'Confirmed Date': c.confirmed_date ?? '',
         'Confirmed Time': c.confirmed_time ?? '',
         'Invited At': c.invited_at ?? '',
+        'Last Reminder At': c.last_reminder_at ?? '',
         'Responded At': c.submitted_at ?? '',
         'Completed At': c.completed_at ?? '',
       }));
@@ -499,6 +521,7 @@ type ClientRow = {
   follow_up_due: boolean;
   submitted_at: string | null;
   invited_at: string | null;
+  last_reminder_at: string | null;
 };
 
 function ClientCard({ c, onPress, onWhatsApp, overdue, onSuspend, onReinstate, suspended }: { c: ClientRow; onPress: () => void; onWhatsApp?: (kind: 'invite' | 'reminder') => void; overdue?: boolean; onSuspend?: () => void; onReinstate?: () => void; suspended?: boolean }) {
@@ -538,6 +561,15 @@ function ClientCard({ c, onPress, onWhatsApp, overdue, onSuspend, onReinstate, s
           <Text className="text-[11px] font-semibold text-accent-foreground">Overdue</Text>
         )}
       </View>
+
+      {/* Outreach timestamp — when the invite / last reminder was actually sent */}
+      {(c.invited_at || c.last_reminder_at) && (
+        <Text className="mt-2 text-[11px] text-muted-foreground">
+          {c.last_reminder_at
+            ? `Reminder sent ${hkStamp(c.last_reminder_at)} (HK)`
+            : `Invited ${hkStamp(c.invited_at)} (HK)`}
+        </Text>
+      )}
 
       {/* Doc indicators */}
       <View className="mt-2 flex-row gap-2">
