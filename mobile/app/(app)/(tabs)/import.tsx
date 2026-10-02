@@ -25,13 +25,18 @@ cssInterop(Trash2Icon, { className: { target: 'style', nativeStyleToProp: { colo
 
 type Row = { salutation: string; first_name: string; last_name: string; country_code: string; phone: string; nationality: string; handling_staff: string };
 
-const EMPTY_ROW: Row = { salutation: '', first_name: '', last_name: '', country_code: '+44', phone: '', nationality: '', handling_staff: 'Sarah Mitchell' };
+const EMPTY_ROW: Row = { salutation: '', first_name: '', last_name: '', country_code: '+44', phone: '', nationality: '', handling_staff: '' };
 
 export default function ImportScreen() {
   const { client } = useApp();
   const { user, userRole, userFullName } = useAuth();
   const queryClient = useQueryClient();
-  const [rows, setRows] = useState<Row[]>([{ ...EMPTY_ROW }]);
+  // What a newly-added client's "Handling staff" should default to: the signed-in
+  // user's full name, else their email, else a neutral placeholder. Never a
+  // hardcoded colleague name (the old "Sarah Mitchell" default was wrong for
+  // anyone who isn't Sarah).
+  const staffDisplayName = userFullName || user?.email || 'Unassigned';
+  const [rows, setRows] = useState<Row[]>([{ ...EMPTY_ROW, handling_staff: staffDisplayName }]);
   const [pasteText, setPasteText] = useState('');
   const [importingDraft, setImportingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,13 +62,13 @@ export default function ImportScreen() {
       const last_name = c || '';
       const phone = d || '';
       const nationality = e || '';
-      const handling_staff = f || 'Sarah Mitchell';
+      const handling_staff = f || staffDisplayName;
       if (!first_name && !last_name && !phone) continue;
       parsed.push({ salutation, first_name, last_name, country_code: '+44', phone, nationality, handling_staff });
     }
 
     if (parsed.length === 0) {
-      setError('Nothing parsed — paste rows like "John, Smith, +1 555 0100, Sarah Mitchell" (one per line)');
+      setError(`Nothing parsed — paste rows like "John, Smith, +1 555 0100, ${staffDisplayName}" (one per line)`);
       return;
     }
 
@@ -86,7 +91,7 @@ export default function ImportScreen() {
       // filter (staff sees own only) shows these immediately. Supervisors/admins
       // keep staff_user_id null until the case is explicitly assigned.
       const ownId = userRole === 'staff' ? user?.id ?? null : null;
-      const ownName = userRole === 'staff' && userFullName ? userFullName : '';
+      const ownName = userRole === 'staff' ? staffDisplayName : '';
       const inserts = rows
         .filter((r) => r.first_name.trim() && r.last_name.trim())
         .map((r) => ({
@@ -111,7 +116,7 @@ export default function ImportScreen() {
     },
     onSuccess: (n) => {
       setSuccess(`Imported ${n} client${n === 1 ? '' : 's'} — assigned & awaiting outreach`);
-      setRows([{ ...EMPTY_ROW }]);
+      setRows([{ ...EMPTY_ROW, handling_staff: staffDisplayName }]);
       queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
     onError: (e: any) => setError(e?.message ?? 'Import failed'),
@@ -121,7 +126,7 @@ export default function ImportScreen() {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
   };
 
-  const addRow = () => setRows((prev) => [...prev, { ...EMPTY_ROW }]);
+  const addRow = () => setRows((prev) => [...prev, { ...EMPTY_ROW, handling_staff: staffDisplayName }]);
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -152,7 +157,7 @@ export default function ImportScreen() {
             <TextInput
               className="mt-3 min-h-[120px] bg-background rounded-xl px-3 py-3 border border-border text-foreground text-left"
               style={{ textAlignVertical: 'top' }}
-              placeholder={'Example:\nMr, John, Smith, +1 555 0100, USA, Sarah Mitchell\nMs, Alice, Doe, +1 555 0101, UK, Sarah Mitchell'}
+              placeholder={`Example:\nMr, John, Smith, +1 555 0100, USA, ${staffDisplayName}\nMs, Alice, Doe, +1 555 0101, UK, ${staffDisplayName}`}
               placeholderTextColor="#8d9d9e"
               multiline
               value={pasteText}
