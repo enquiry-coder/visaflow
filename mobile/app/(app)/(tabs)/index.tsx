@@ -90,10 +90,13 @@ export default function PipelineScreen() {
   });
 
   const sendWhatsApp = useMutation({
-    mutationFn: async (c: { id: string; first_name: string; reg_no: string; phone: string }) => {
+    mutationFn: async (c: { id: string; salutation: string | null; first_name: string; last_name: string; reg_no: string; phone: string }) => {
       // Public portal link — the client opens this in any browser, no app download needed.
       const portalUrl = `${getPortalBase()}/portal/${c.reg_no}`;
-      const msg = `Hi ${c.first_name}, this is Sarah regarding your application (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
+      const salutation = c.salutation ? `${c.salutation} ` : '';
+      const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
+      const staffName = userFullName || 'our team';
+      const msg = `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker regarding your application by Trust (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
       // Open WhatsApp (native app on mobile, wa.me in a new tab on web) with the message pre-filled.
       const phone = (c.phone || '').replace(/\D/g, '');
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
@@ -478,6 +481,7 @@ export default function PipelineScreen() {
 
 type ClientRow = {
   id: string;
+  salutation: string | null;
   first_name: string;
   last_name: string;
   reg_no: string;
