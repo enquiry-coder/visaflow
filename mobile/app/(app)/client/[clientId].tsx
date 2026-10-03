@@ -65,6 +65,70 @@ function printImage(url: string, fileName: string): void {
   w.focus();
 }
 
+/**
+ * Print the full ID-verification report (web only). Assembles the passport,
+ * address proof and stamped capture into one print-ready page, plus a completed
+ * checklist with timestamps + staff, so the whole proof-of-work is on one document.
+ */
+function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const w = window.open('', '_blank');
+  if (!w) return;
+
+  const sal = c.salutation ? `${c.salutation} ` : '';
+  const fullName = `${sal}${c.first_name} ${c.last_name}`.trim();
+  const step = (done: boolean, label: string, meta?: string) =>
+    `<div class="row"><span class="chk">${done ? '✓' : '○'}</span><span class="lbl">${label}${meta ? ` <span class="meta">— ${meta}</span>` : ''}</span></div>`;
+
+  const images = [
+    { t: 'Passport Copy', u: c.passport_url },
+    { t: 'Address Proof', u: c.address_proof_url },
+    { t: 'Stamped Evidence Capture', u: c.capture_stamped_url || c.capture_url },
+  ]
+    .filter((i) => i.u)
+    .map((i) => `<div class="imgWrap"><div class="cap">${i.t}</div><img src="${i.u}" /></div>`)
+    .join('');
+
+  const hk = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Hong_Kong' }) + ' (HK)' : '—');
+
+  const html = `<!doctype html><html><head><title>ID Verification Report — ${c.reg_no}</title>
+<style>
+  *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:32px;color:#111;background:#fff}
+  .hd{border-bottom:3px solid #111;padding-bottom:12px;margin-bottom:20px}
+  .hd h1{font-size:22px;margin:0 0 4px}.hd .sub{font-size:12px;color:#555}
+  .badge{display:inline-block;background:#0c8f3c;color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:4px;margin-top:8px}
+  .grid{display:grid;grid-template-columns:1fr;gap:20px}
+  .imgWrap{border:1px solid #ddd;border-radius:8px;overflow:hidden}
+  .cap{background:#f4f4f4;font-size:11px;font-weight:bold;padding:8px 12px;border-bottom:1px solid #ddd}
+  img{display:block;width:100%;object-fit:contain;background:#fafafa}
+  .steps{margin-top:24px;border-top:2px solid #eee;padding-top:16px}
+  .row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #eee;font-size:13px}
+  .chk{font-weight:bold;color:#0c8f3c;width:16px;text-align:center}
+  .lbl{flex:1}.meta{color:#777;font-size:12px}
+  .foot{margin-top:20px;font-size:10px;color:#888}
+</style></head><body>
+  <div class="hd">
+    <h1>ID Verification Report</h1>
+    <div class="sub">Client: ${fullName} &nbsp;·&nbsp; Serial No: ${c.reg_no} &nbsp;·&nbsp; Nationality: ${c.nationality || '—'}</div>
+    <div class="badge">${allStepsComplete ? '✓ ALL STEPS COMPLETED' : 'INCOMPLETE'}</div>
+  </div>
+  <div class="grid">${images}</div>
+  <div class="steps">
+    ${step(!!c.passport_url && !!c.address_proof_url, 'Documents uploaded')}
+    ${step(docsClear, 'Documents marked Clear')}
+    ${step(!!c.capture_url, 'Live face captured')}
+    ${step(c.face_match === 'yes', 'Face matches passport photo', c.face_match === 'yes' ? `by ${c.matched_by || 'Staff'} ${hk(c.face_match_at)}` : (c.face_match === 'no' ? 'flagged — NO match' : 'not recorded'))}
+    ${step(!!c.matched_at, 'Matched & stamped (timestamp burned in)', `by ${c.matched_by || 'Staff'} ${hk(c.matched_at)}`)}
+  </div>
+  <div class="foot">Generated ${hk(new Date().toISOString())} · Grandtag Insurance Broker</div>
+</body></html>`;
+
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
+
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const { client } = useApp();
@@ -336,6 +400,8 @@ export default function ClientDetailScreen() {
   // Docs are only "clear" (ready to confirm the appointment) once staff has reviewed
   // BOTH the passport and address proof and marked them OK.
   const docsClear = c.passport_clarity === 'ok' && c.address_clarity === 'ok';
+  // The interview is only "complete" (and report-ready) once every KYC step is done.
+  const allStepsComplete = !!docsClear && c.face_match === 'yes' && !!c.matched_at && !!c.capture_url;
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -527,6 +593,16 @@ export default function ClientDetailScreen() {
                   </Text>
                 )}
               </View>
+
+              {allStepsComplete ? (
+                <Pressable
+                  onPress={() => printReport(c, docsClear, true)}
+                  className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:scale-[0.97]"
+                >
+                  <CheckCircle2Icon className="text-primary-foreground" size={16} />
+                  <Text className="text-sm font-semibold text-primary-foreground">Print verification report</Text>
+                </Pressable>
+              ) : null}
 
               {c.matched_at ? (
                 <View className="rounded-xl bg-chart-2/10 p-3 gap-2">
