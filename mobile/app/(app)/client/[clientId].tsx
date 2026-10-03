@@ -80,14 +80,10 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
   const step = (done: boolean, label: string, meta?: string) =>
     `<div class="row"><span class="chk">${done ? '✓' : '○'}</span><span class="lbl">${label}${meta ? ` <span class="meta">— ${meta}</span>` : ''}</span></div>`;
 
-  const images = [
-    { t: 'Passport Copy', u: c.passport_url },
-    { t: 'Address Proof', u: c.address_proof_url },
-    { t: 'Stamped Evidence Capture', u: c.capture_stamped_url || c.capture_url },
-  ]
-    .filter((i) => i.u)
-    .map((i) => `<div class="imgWrap"><div class="cap">${i.t}</div><img src="${i.u}" /></div>`)
-    .join('');
+  const docCard = (t: string, u: string | null | undefined) =>
+    u
+      ? `<div class="imgWrap"><div class="cap">${t}</div><img src="${u}" /></div>`
+      : `<div class="imgWrap empty"><div class="cap">${t}</div><div class="missing">Not uploaded</div></div>`;
 
   const hk = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Hong_Kong' }) + ' (HK)' : '—');
 
@@ -97,28 +93,40 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
   .hd{border-bottom:3px solid #111;padding-bottom:12px;margin-bottom:20px}
   .hd h1{font-size:22px;margin:0 0 4px}.hd .sub{font-size:12px;color:#555}
   .badge{display:inline-block;background:#0c8f3c;color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:4px;margin-top:8px}
-  .grid{display:grid;grid-template-columns:1fr;gap:20px}
-  .imgWrap{border:1px solid #ddd;border-radius:8px;overflow:hidden}
-  .cap{background:#f4f4f4;font-size:11px;font-weight:bold;padding:8px 12px;border-bottom:1px solid #ddd}
-  img{display:block;width:100%;object-fit:contain;background:#fafafa}
-  .steps{margin-top:24px;border-top:2px solid #eee;padding-top:16px}
-  .row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #eee;font-size:13px}
-  .chk{font-weight:bold;color:#0c8f3c;width:16px;text-align:center}
-  .lbl{flex:1}.meta{color:#777;font-size:12px}
-  .foot{margin-top:20px;font-size:10px;color:#888}
+  .cap{background:#f4f4f4;font-size:10px;font-weight:bold;padding:5px 8px;border-bottom:1px solid #ddd}
+  .imgWrap{border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+  .imgWrap img{display:block;width:100%;height:110px;object-fit:contain;background:#fafafa}
+  .missing{height:110px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px}
+  .docs{display:flex;gap:12px}.docs .imgWrap{flex:1;max-width:50%}
+  .stamped{margin-top:12px;max-width:60%}
+  .stamped img{height:120px}
+  .steps{margin-top:20px;border-top:2px solid #eee;padding-top:14px}
+  .steps h2{font-size:13px;margin:0 0 4px}
+  .row{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px}
+  .chk{font-weight:bold;color:#0c8f3c;width:14px;text-align:center}
+  .lbl{flex:1}.meta{color:#777;font-size:11px}
+  .foot{margin-top:16px;font-size:9px;color:#888}
 </style></head><body>
   <div class="hd">
     <h1>ID Verification Report</h1>
     <div class="sub">Client: ${fullName} &nbsp;·&nbsp; Serial No: ${c.reg_no} &nbsp;·&nbsp; Nationality: ${c.nationality || '—'}</div>
     <div class="badge">${allStepsComplete ? '✓ ALL STEPS COMPLETED' : 'INCOMPLETE'}</div>
   </div>
-  <div class="grid">${images}</div>
+  <div class="docs">
+    ${docCard('Passport Copy', c.passport_url)}
+    ${docCard('Address Proof', c.address_proof_url)}
+  </div>
+  <div class="imgWrap stamped">
+    <div class="cap">Stamped Evidence Capture</div>
+    ${(c.capture_stamped_url || c.capture_url) ? `<img src="${c.capture_stamped_url || c.capture_url}" />` : `<div class="missing">Not uploaded</div>`}
+  </div>
   <div class="steps">
-    ${step(!!c.passport_url && !!c.address_proof_url, 'Documents uploaded')}
-    ${step(docsClear, 'Documents marked Clear')}
-    ${step(!!c.capture_url, 'Live face captured')}
-    ${step(c.face_match === 'yes', 'Face matches passport photo', c.face_match === 'yes' ? `by ${c.matched_by || 'Staff'} ${hk(c.face_match_at)}` : (c.face_match === 'no' ? 'flagged — NO match' : 'not recorded'))}
-    ${step(!!c.matched_at, 'Matched & stamped (timestamp burned in)', `by ${c.matched_by || 'Staff'} ${hk(c.matched_at)}`)}
+    <h2>Live Verification — Steps Completed</h2>
+    ${step(!!c.passport_url && !!c.address_proof_url, '1. Documents uploaded')}
+    ${step(docsClear, '2. Documents marked Clear')}
+    ${step(!!c.capture_url, '3. Live face captured')}
+    ${step(c.face_match === 'yes', '4. Face matches passport photo', c.face_match === 'yes' ? `by ${c.matched_by || 'Staff'} ${hk(c.face_match_at)}` : (c.face_match === 'no' ? 'flagged — NO match' : 'not recorded'))}
+    ${step(!!c.matched_at, '5. Matched & stamped (timestamp burned in)', `by ${c.matched_by || 'Staff'} ${hk(c.matched_at)}`)}
   </div>
   <div class="foot">Generated ${hk(new Date().toISOString())} · Grandtag Insurance Broker</div>
 </body></html>`;
