@@ -72,19 +72,26 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
   .hd h1{font-size:22px;margin:0 0 4px}.hd .sub{font-size:12px;color:#555}
   .badge{display:inline-block;background:#0c8f3c;color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:4px;margin-top:8px}
   .cap{background:#f4f4f4;font-size:10px;font-weight:bold;padding:5px 8px;border-bottom:1px solid #ddd}
-  .imgWrap{border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
-  .imgWrap img{display:block;width:100%;height:110px;object-fit:contain;background:#fafafa}
+  .imgWrap{border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;break-inside:avoid;page-break-inside:avoid}
+  .imgWrap img{display:block;width:100%;height:110px;max-height:110px;object-fit:contain;background:#fafafa}
   .missing{height:110px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px}
   .capture{margin-top:12px}
-  .capture img{height:260px}
+  .capture img{height:260px;max-height:260px}
   .lower{margin-top:12px;display:flex;gap:16px;align-items:stretch}
-  .docs{flex:0 0 42%;display:flex;flex-direction:column;gap:12px}
+  .docs{flex:0 0 42%;display:flex;flex-direction:column;gap:12px;max-width:42%}
   .steps{flex:1;border:1px solid #eee;border-radius:6px;padding:12px}
   .steps h2{font-size:13px;margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid #eee}
   .row{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed #eee;font-size:12px}
   .chk{font-weight:bold;color:#0c8f3c;width:14px;text-align:center}
   .lbl{flex:1}.meta{color:#777;font-size:11px}
   .foot{margin-top:16px;font-size:9px;color:#888}
+  @media print{
+    @page{size:A4;margin:12mm}
+    body{margin:0;padding:12mm;width:auto}
+    img{max-width:100% !important;height:auto !important;max-height:180px !important;object-fit:contain}
+    .capture img{max-height:240px !important}
+    .imgWrap,.lower,.steps{break-inside:avoid;page-break-inside:avoid}
+  }
 </style></head><body>
   <div class="hd">
     <h1>ID Verification Report</h1>
