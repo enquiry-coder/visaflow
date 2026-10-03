@@ -75,12 +75,13 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
   .imgWrap{border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
   .imgWrap img{display:block;width:100%;height:110px;object-fit:contain;background:#fafafa}
   .missing{height:110px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px}
-  .docs{display:flex;gap:12px}.docs .imgWrap{flex:1;max-width:50%}
-  .stamped{margin-top:12px;max-width:36%}
-  .stamped img{height:240px}
-  .steps{margin-top:20px;border-top:2px solid #eee;padding-top:14px}
-  .steps h2{font-size:13px;margin:0 0 4px}
-  .row{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px}
+  .capture{margin-top:12px}
+  .capture img{height:260px}
+  .lower{margin-top:12px;display:flex;gap:16px;align-items:stretch}
+  .docs{flex:0 0 42%;display:flex;flex-direction:column;gap:12px}
+  .steps{flex:1;border:1px solid #eee;border-radius:6px;padding:12px}
+  .steps h2{font-size:13px;margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid #eee}
+  .row{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed #eee;font-size:12px}
   .chk{font-weight:bold;color:#0c8f3c;width:14px;text-align:center}
   .lbl{flex:1}.meta{color:#777;font-size:11px}
   .foot{margin-top:16px;font-size:9px;color:#888}
@@ -90,22 +91,27 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
     <div class="sub">Client: ${fullName} &nbsp;·&nbsp; Serial No: ${c.reg_no} &nbsp;·&nbsp; Nationality: ${c.nationality || '—'}</div>
     <div class="badge">${allStepsComplete ? '✓ ALL STEPS COMPLETED' : 'INCOMPLETE'}</div>
   </div>
-  <div class="docs">
-    ${docCard('Passport Copy', c.passport_url)}
-    ${docCard('Address Proof', c.address_proof_url)}
+
+  <div class="imgWrap capture">
+    <div class="cap">Live Face Capture</div>
+    ${(c.capture_stamped_url || c.capture_url) ? `<img src="${c.capture_stamped_url || c.capture_url}" />` : `<div class="missing" style="height:260px">Not uploaded</div>`}
   </div>
-  <div class="imgWrap stamped">
-    <div class="cap">Stamped Evidence Capture</div>
-    ${(c.capture_stamped_url || c.capture_url) ? `<img src="${c.capture_stamped_url || c.capture_url}" />` : `<div class="missing">Not uploaded</div>`}
+
+  <div class="lower">
+    <div class="docs">
+      ${docCard('Passport Copy', c.passport_url)}
+      ${docCard('Address Proof', c.address_proof_url)}
+    </div>
+    <div class="steps">
+      <h2>Live Verification — Steps Completed</h2>
+      ${step(!!c.passport_url && !!c.address_proof_url, '1. Documents uploaded')}
+      ${step(docsClear, '2. Documents marked Clear')}
+      ${step(!!c.capture_url, '3. Live face captured')}
+      ${step(c.face_match === 'yes', '4. Face matches passport photo', c.face_match === 'yes' ? `by ${c.matched_by || 'Staff'} ${hk(c.face_match_at)}` : (c.face_match === 'no' ? 'flagged — NO match' : 'not recorded'))}
+      ${step(!!c.matched_at, '5. Matched & stamped (timestamp burned in)', `by ${c.matched_by || 'Staff'} ${hk(c.matched_at)}`)}
+    </div>
   </div>
-  <div class="steps">
-    <h2>Live Verification — Steps Completed</h2>
-    ${step(!!c.passport_url && !!c.address_proof_url, '1. Documents uploaded')}
-    ${step(docsClear, '2. Documents marked Clear')}
-    ${step(!!c.capture_url, '3. Live face captured')}
-    ${step(c.face_match === 'yes', '4. Face matches passport photo', c.face_match === 'yes' ? `by ${c.matched_by || 'Staff'} ${hk(c.face_match_at)}` : (c.face_match === 'no' ? 'flagged — NO match' : 'not recorded'))}
-    ${step(!!c.matched_at, '5. Matched & stamped (timestamp burned in)', `by ${c.matched_by || 'Staff'} ${hk(c.matched_at)}`)}
-  </div>
+
   <div class="foot">Generated ${hk(new Date().toISOString())} · Grandtag Insurance Broker</div>
 </body></html>`;
 
