@@ -44,28 +44,6 @@ cssInterop(ExternalLinkIcon, { className: { target: 'style', nativeStyleToProp: 
 cssInterop(UploadIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 /**
- * Print the stamped evidence image (web only). Opens a hidden print-only window
- * containing just the image, triggers the browser print dialog, then closes it.
- * On native (no printing path here) it falls back to opening the image.
- */
-function printImage(url: string, fileName: string): void {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    Linking.openURL(url);
-    return;
-  }
-  const w = window.open('', '_blank');
-  if (!w) {
-    window.open(url, '_blank');
-    return;
-  }
-  w.document.write(
-    `<html><head><title>${fileName}</title><style>html,body{margin:0;padding:0;height:100%}img{display:block;max-width:100%;max-height:100%;margin:auto}</style></head><body><img src="${url}" onload="setTimeout(function(){window.print()},300)" /></body></html>`,
-  );
-  w.document.close();
-  w.focus();
-}
-
-/**
  * Print the full ID-verification report (web only). Assembles the passport,
  * address proof and stamped capture into one print-ready page, plus a completed
  * checklist with timestamps + staff, so the whole proof-of-work is on one document.
@@ -98,8 +76,8 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
   .imgWrap img{display:block;width:100%;height:110px;object-fit:contain;background:#fafafa}
   .missing{height:110px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px}
   .docs{display:flex;gap:12px}.docs .imgWrap{flex:1;max-width:50%}
-  .stamped{margin-top:12px;max-width:60%}
-  .stamped img{height:120px}
+  .stamped{margin-top:12px;max-width:36%}
+  .stamped img{height:240px}
   .steps{margin-top:20px;border-top:2px solid #eee;padding-top:14px}
   .steps h2{font-size:13px;margin:0 0 4px}
   .row{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px}
@@ -565,19 +543,6 @@ export default function ClientDetailScreen() {
                 />
               )}
 
-              <Pressable
-                onPress={markMatched}
-                disabled={matchedSaving}
-                className={`flex-row items-center justify-center gap-2 rounded-xl py-3 active:scale-[0.97] ${c.capture_url ? 'bg-primary' : 'bg-muted'}`}
-              >
-                {matchedSaving ? (
-                  <ActivityIndicator size="small" color={c.capture_url ? '#fff' : '#6b7280'} />
-                ) : (
-                  <UserCheckIcon className={c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'} size={18} />
-                )}
-                <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>⑤ Matched — save as evidence (timestamp burned in)</Text>
-              </Pressable>
-
               {/* Face-match proof-of-work: does the live client match the passport photo? */}
               <View className="rounded-xl bg-background border border-border p-3 gap-2">
                 <Text className="text-xs font-semibold text-foreground">④ Confirm the live client matches the passport photo</Text>
@@ -602,6 +567,19 @@ export default function ClientDetailScreen() {
                 )}
               </View>
 
+              <Pressable
+                onPress={markMatched}
+                disabled={matchedSaving}
+                className={`flex-row items-center justify-center gap-2 rounded-xl py-3 active:scale-[0.97] ${c.capture_url ? 'bg-primary' : 'bg-muted'}`}
+              >
+                {matchedSaving ? (
+                  <ActivityIndicator size="small" color={c.capture_url ? '#fff' : '#6b7280'} />
+                ) : (
+                  <UserCheckIcon className={c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'} size={18} />
+                )}
+                <Text className={`text-sm font-semibold ${c.capture_url ? 'text-primary-foreground' : 'text-muted-foreground'}`}>⑤ Matched — save as evidence (timestamp burned in)</Text>
+              </Pressable>
+
               {allStepsComplete ? (
                 <Pressable
                   onPress={() => printReport(c, docsClear, true)}
@@ -618,24 +596,6 @@ export default function ClientDetailScreen() {
                   <Text className="text-[11px] text-muted-foreground">
                     {c.matched_by ?? 'Staff'} · {new Date(c.matched_at).toLocaleString()} (Hong Kong time, UTC+8)
                   </Text>
-                  {c.capture_stamped_url ? (
-                    <View className="flex-row gap-2">
-                      <Pressable
-                        onPress={() => printImage(c.capture_stamped_url!, `${c.first_name}_${c.last_name}_matched_evidence`)}
-                        className="flex-1 flex-row items-center justify-center gap-1.5 rounded-lg bg-primary py-2 active:scale-[0.97]"
-                      >
-                        <ExternalLinkIcon className="text-primary-foreground" size={14} />
-                        <Text className="text-xs font-semibold text-primary-foreground">Print stamped image</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => (Platform.OS === 'web' ? (window.open(c.capture_stamped_url, '_blank') as any) : Linking.openURL(c.capture_stamped_url!))}
-                        className="flex-row items-center justify-center gap-1.5 rounded-lg bg-background px-3 py-2 active:scale-[0.97]"
-                      >
-                        <ExternalLinkIcon className="text-foreground" size={14} />
-                        <Text className="text-xs font-semibold text-foreground">Open</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
                 </View>
               ) : null}
             </View>
