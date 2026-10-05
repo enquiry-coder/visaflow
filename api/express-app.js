@@ -373,6 +373,88 @@ app.post("/admin/clients/backfill-staff", requireAdmin, async (req, res) => {
   }
 });
 
+// Public calendar-invite endpoint. The WhatsApp confirmation message links here
+// (no auth — the client taps it), and we return a standards-compliant .ics file
+// for the client's confirmed Zoom appointment. The date/time are interpreted as
+// Hong Kong time (UTC+8, no DST) and written as absolute UTC instants, so the
+// client's device renders the event in ITS OWN local time automatically.
+app.get("/calendar-invite", async (req, res) => {
+  const reg = String(req.query.reg || "").trim();
+  if (!reg) return res.status(400).send("Missing reg number");
+
+  try {
+    const url = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return res.status(500).send("Calendar service not configured");
+
+    const resp = await fetch(
+      `${url.replace(/\/$/, "")}/rest/v1/clients?reg_no=eq.${encodeURIComponent(reg)}&select=reg_no,first_name,last_name,confirmed_date,confirmed_time,preferred_date,preferred_time,zoom_link`,
+      {
+        method: "GET",
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+      }
+    );
+    if (!resp.ok) return res.status(resp.status).send("Failed to load appointment");
+    const rows = await resp.json();
+    const c = (rows || [])[0];
+    if (!c) return res.status(404).send("Appointment not found");
+
+    const date = c.confirmed_date || c.preferred_date || "";
+    const time = c.confirmed_time || c.preferred_time || "";
+    if (!date || !time) return res.status(400).send("Appointment time not confirmed yet");
+
+    // Parse "HH:MM" (24h) or "H:MM AM/PM" wall-clock time as Hong Kong time.
+    const m = String(time).trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (!m) return res.status(400).send("Invalid appointment time");
+    let hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const ap = (m[3] || "").toUpperCase();
+    if (ap === "PM" && hh < 12) hh += 12;
+    if (ap === "AM" && hh === 12) hh = 0;
+
+    // Build the absolute UTC instant from HK wall-clock (UTC+8, no DST).
+    const dateParts = String(date).slice(0, 10); // YYYY-MM-DD
+    const startUtc = new Date(`${dateParts}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00+08:00`);
+    if (Number.isNaN(startUtc.getTime())) return res.status(400).send("Invalid appointment date/time");
+    const endUtc = new Date(startUtc.getTime() + 60 * 60 * 1000); // 60-min interview
+
+    const fmt = (d) =>
+      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const esc = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,");
+
+    const fullName = `${c.first_name || ""}${c.last_name ? " " + c.last_name : ""}`.trim();
+    const summary = `Zoom Interview${fullName ? " — " + fullName : ""}`;
+    const desc = `Zoom interview (Hong Kong time, UTC+8).`;
+    const loc = c.zoom_link || "";
+
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//VisaFlow//Appointment//EN",
+      "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:${reg}@visaflow`,
+      `DTSTAMP:${fmt(new Date())}`,
+      `DTSTART:${fmt(startUtc)}`,
+      `DTEND:${fmt(endUtc)}`,
+      `SUMMARY:${esc(summary)}`,
+      `DESCRIPTION:${esc(desc)}`,
+    ];
+    if (loc) lines.push(`LOCATION:${esc(loc)}`);
+    lines.push("END:VEVENT", "END:VCALENDAR");
+
+    const ics = lines.join("\r\n");
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="zoom-interview-${reg}.ics"`);
+    return res.send(ics);
+  } catch (e) {
+    return res.status(500).send("Calendar service error");
+  }
+});
+
 app.get("/api", (req, res) => {
   res.json({
     project: process.env.RAPIDNATIVE_PROJECT_ID,

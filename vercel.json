@@ -13,6 +13,7 @@
     { "source": "/admin/users/:path*", "destination": "/api/vercel" },
     { "source": "/api/vercel", "destination": "/api/vercel" },
     { "source": "/api/health", "destination": "/api/vercel" },
+    { "source": "/calendar-invite", "destination": "/api/vercel" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

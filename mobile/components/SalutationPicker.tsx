@@ -13,8 +13,6 @@ const DEFAULT_OPTIONS: Option[] = [
   { label: 'Mr', value: 'Mr' },
   { label: 'Ms', value: 'Ms' },
   { label: 'Mrs', value: 'Mrs' },
-  { label: 'Dr', value: 'Dr' },
-  { label: 'Mx', value: 'Mx' },
 ];
 
 type Props = {

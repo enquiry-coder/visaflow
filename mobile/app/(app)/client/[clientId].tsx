@@ -22,6 +22,8 @@ import NationalityPicker from '@/components/NationalityPicker';
 import { uploadClientDoc, uploadStampedCapture } from '@/src/lib/upload';
 import { stampCapture } from '@/src/lib/stampCapture';
 import { getStaffZoomLink, saveStaffZoomLink } from '@/src/lib/remember';
+import { zonedTimeToUtc } from 'date-fns-tz';
+import { format, parse } from 'date-fns';
 
 // Resolve the hosted base URL for the client portal (same logic as the pipeline board).
 function getPortalBase(): string {
@@ -36,6 +38,24 @@ function getPortalBase(): string {
 // accepted as a meeting link.
 function looksLikeZoomLink(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value);
+}
+
+// Build a Google Calendar "add event" link from the confirmed date + time. The
+// date/time are wall-clock Hong Kong time, so convert to a UTC instant for the
+// Google template (clients then see it in their own local time). Returns '' if
+// the date/time can't be parsed so the link is simply omitted.
+function buildGoogleCalendarLink(date: string, time: string): string {
+  if (!date || !time) return '';
+  const clean = time.trim().replace(/\s*([AaPp][Mm])\s*$/, ' $1').replace(/\s+/g, ' ');
+  const naive = parse(`${date} ${clean}`, 'yyyy-MM-dd h:mm aa', new Date());
+  if (Number.isNaN(naive.getTime())) return '';
+  const start = zonedTimeToUtc(naive, 'Asia/Hong_Kong');
+  const end = new Date(start.getTime() + 60 * 60 * 1000); // 60-min interview
+  const g = (d: Date) => format(d, "yyyyMMdd'T'HHmmss'Z'");
+  const dates = `${g(start)}/${g(end)}`;
+  const text = encodeURIComponent('Zoom Interview');
+  const details = encodeURIComponent('Zoom interview (Hong Kong time, UTC+8)');
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
 }
 
 cssInterop(ArrowLeftIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -206,7 +226,14 @@ export default function ClientDetailScreen() {
     });
     const sal = c.salutation ? `${c.salutation} ` : '';
     const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
-    const msg = `Thanks ${sal}${fullName}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime} (Hong Kong time, UTC+8)` : ''}. Here is your meeting link: ${link}`;
+    const calDate = confirmedTime.trim() || c.confirmed_time || c.preferred_time ? (c.confirmed_date || c.preferred_date || '') : '';
+    const calTime = confirmedTime.trim() || c.confirmed_time || c.preferred_time || '';
+    const googleCalLink = buildGoogleCalendarLink(calDate, calTime);
+    const icsLink = `${getPortalBase()}/calendar-invite?reg=${encodeURIComponent(c.reg_no)}`;
+    const calLine = icsLink
+      ? `Add to your calendar: ${icsLink}`
+      : (googleCalLink ? `Add to your calendar: ${googleCalLink}` : '');
+    const msg = `Thanks ${sal}${fullName}! Your documents are received. Your Zoom interview is confirmed${exactTime ? ` for ${c.preferred_date ? `${c.preferred_date} at ` : ''}${exactTime} (Hong Kong time, UTC+8)` : ''}. Here is your meeting link: ${link}${calLine ? '\n\n' + calLine : ''}`;
     const phone = (c.phone || '').replace(/\D/g, '');
     try {
       await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);

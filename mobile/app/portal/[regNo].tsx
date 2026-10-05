@@ -236,7 +236,7 @@ export default function ClientPortalScreen() {
       <SafeAreaView edges={['top']} className="flex-1 bg-background">
         <View className="flex-1 items-center justify-center px-6">
           <CheckCircle2Icon className="text-chart-2" size={56} />
-          <Text className="mt-4 text-2xl font-bold text-foreground text-center">Thank you{c ? `, ${c.first_name}` : ''}!</Text>
+          <Text className="mt-4 text-2xl font-bold text-foreground text-center">Thank you{c ? `, ${c.salutation ? c.salutation + ' ' : ''}${c.first_name}${c.last_name ? ' ' + c.last_name : ''}` : ''}!</Text>
           <Text className="mt-2 text-base text-muted-foreground text-center">
             Your appointment invitation has already been answered. Your handling staff will confirm your Zoom call shortly.
           </Text>
