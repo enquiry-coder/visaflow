@@ -99,7 +99,7 @@ export default function PipelineScreen() {
     },
     onSuccess: () => {
       setNotice('Client updated');
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'], exact: false });
     },
   });
 
@@ -135,7 +135,7 @@ export default function PipelineScreen() {
     },
     onSuccess: () => {
       setNotice('WhatsApp opened with the portal link — invitation sent');
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'], exact: false });
     },
   });
 

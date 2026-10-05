@@ -170,7 +170,12 @@ export default function ClientDetailScreen() {
       const { error } = await client.from('clients').update(patch).eq('id', clientId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['client', clientId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', clientId] });
+      // Also refresh the pipeline board's list (and its category counts) so a
+      // stage change here (status/documents/matched) shows up immediately there.
+      queryClient.invalidateQueries({ queryKey: ['clients'], exact: false });
+    },
     onError: (e: any) => setError(e?.message ?? 'Update failed'),
   });
 
