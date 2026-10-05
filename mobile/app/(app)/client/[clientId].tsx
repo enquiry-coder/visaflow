@@ -41,13 +41,13 @@ function looksLikeZoomLink(value: string): boolean {
 }
 
 // Build a Google Calendar "add event" link from the confirmed date + time. The
-// date/time are wall-clock Hong Kong time, so convert to a UTC instant for the
-// Google template (clients then see it in their own local time). Returns '' if
-// the date/time can't be parsed so the link is simply omitted.
+// date/time are wall-clock Hong Kong time in 24-hour format (e.g. "13:00"), so
+// convert to a UTC instant for the Google template (clients then see it in their
+// own local time). Returns '' if the date/time can't be parsed.
 function buildGoogleCalendarLink(date: string, time: string): string {
   if (!date || !time) return '';
-  const clean = time.trim().replace(/\s*([AaPp][Mm])\s*$/, ' $1').replace(/\s+/g, ' ');
-  const naive = parse(`${date} ${clean}`, 'yyyy-MM-dd h:mm aa', new Date());
+  const clean = time.trim().replace(/\s+/g, ' ');
+  const naive = parse(`${date} ${clean}`, 'yyyy-MM-dd HH:mm', new Date());
   if (Number.isNaN(naive.getTime())) return '';
   const start = zonedTimeToUtc(naive, 'Asia/Hong_Kong');
   const end = new Date(start.getTime() + 60 * 60 * 1000); // 60-min interview
@@ -689,10 +689,11 @@ export default function ClientDetailScreen() {
                 </Text>
                 <TextInput
                   className="mt-2 bg-background rounded-xl px-4 py-3.5 border border-border text-foreground"
-                  placeholder="e.g. 2:30 PM"
+                  placeholder="e.g. 13:00 (24-hour)"
                   placeholderTextColor="#8d9d9e"
                   value={confirmedTime || c.confirmed_time || ''}
                   onChangeText={setConfirmedTime}
+                  keyboardType="numbers-and-punctuation"
                 />
                 <TextInput
                   className="mt-2 bg-background rounded-xl px-4 py-3.5 border border-border text-foreground"

@@ -26,7 +26,7 @@ cssInterop(CalendarClockIcon, { className: { target: 'style', nativeStyleToProp:
 cssInterop(SendIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(CheckCircle2Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
-const TIME_SLOTS = ['9:00 AM', '10:30 AM', '12:00 PM', '2:00 PM', '3:30 PM', '5:00 PM'];
+const TIME_SLOTS = ['09:00', '10:30', '12:00', '14:00', '15:30', '17:00'];
 
 export default function ClientPortalScreen() {
   const { regNo } = useLocalSearchParams<{ regNo: string }>();

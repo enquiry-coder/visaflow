@@ -38,7 +38,9 @@ export function buildCalendarEvent(opts: {
   // Parse the wall-clock date+time, then pin it to Hong Kong time and convert
   // to an absolute UTC instant. The reference date only seeds the local parse;
   // zonedTimeToUtc treats the components as being in OFFICE_TIME_ZONE.
-  const naive = parse(`${date} ${cleanTime}`, 'yyyy-MM-dd h:mm aa', new Date());
+  // 24-hour (HH:mm) is primary; legacy 12-hour (h:mm aa) is still accepted.
+  const is24h = !/[AaPp][Mm]$/.test(cleanTime);
+  const naive = parse(`${date} ${cleanTime}`, is24h ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd h:mm aa', new Date());
   if (Number.isNaN(naive.getTime())) return null;
 
   const startUtc = zonedTimeToUtc(naive, OFFICE_TIME_ZONE);
@@ -53,7 +55,7 @@ export function buildCalendarEvent(opts: {
   const officeLabel = formatInTimeZone(
     startUtc,
     OFFICE_TIME_ZONE,
-    'yyyy-MM-dd h:mm aa',
+    'yyyy-MM-dd HH:mm',
   );
 
   const escape = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,');
