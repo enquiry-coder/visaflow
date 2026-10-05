@@ -31,6 +31,13 @@ function getPortalBase(): string {
   return process.env.EXPO_PUBLIC_WEB_URL ?? 'https://visaflow.example.com';
 }
 
+// Guard against junk being pasted into the Zoom link field (e.g. a stray "git push"
+// from the terminal) and then sent in WhatsApp / remembered. Only real web URLs are
+// accepted as a meeting link.
+function looksLikeZoomLink(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value);
+}
+
 cssInterop(ArrowLeftIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(MessageCircleIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(ClipboardPasteIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -184,6 +191,10 @@ export default function ClientDetailScreen() {
     const link = (zoomLink.trim() || c.zoom_link || '').trim();
     if (!link) {
       setError('Enter the Zoom link first');
+      return;
+    }
+    if (!looksLikeZoomLink(link)) {
+      setError('Enter a valid Zoom meeting link (must start with https://)');
       return;
     }
     if (user?.id) saveStaffZoomLink(user.id, link);
