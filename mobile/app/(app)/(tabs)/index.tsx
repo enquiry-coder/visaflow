@@ -87,6 +87,13 @@ export default function PipelineScreen() {
       return data;
     },
     enabled: !!user,
+    // Auto-refresh so client submissions (via the portal, in the client's own
+    // browser) show up on the board without staff needing to sign out/in or
+    // pull-to-refresh. Clients move "Invited-Not Responded" -> "Responded-To
+    // Confirm" the moment they upload + pick a time, so poll every 20s.
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const suspendClient = useMutation({
