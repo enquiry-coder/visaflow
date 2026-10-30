@@ -91,7 +91,7 @@ export default function SignupScreen() {
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
-          <Text className="text-xs font-semibold tracking-widest text-primary uppercase">VisaFlow</Text>
+          <Text className="text-xs font-semibold tracking-widest text-primary uppercase">Probiz InsureProofID</Text>
           <Text className="mt-2 text-3xl font-bold tracking-tight text-foreground">Create staff account</Text>
           <Text className="mt-1 text-sm text-muted-foreground">
             Set up your login to manage client onboarding.

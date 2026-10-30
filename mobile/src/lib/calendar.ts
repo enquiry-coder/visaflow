@@ -119,7 +119,7 @@ export async function openInCalendar(ics: string): Promise<void> {
     return;
   }
 
-  const FileSystem = await import('expo-file-system');
+  const FileSystem = await import('expo-file-system/legacy');
   const Sharing = (await import('expo-sharing')).default;
 
   const fileUri = FileSystem.cacheDirectory + 'appointment.ics';

@@ -1,0 +1,1 @@
+alter table clients add column if not exists last_reminder_at timestamptz;

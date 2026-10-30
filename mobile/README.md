@@ -4,8 +4,8 @@ The primary workspace: an Expo app wired to the project's Supabase-style databas
 
 ## Tech Stack
 
-- **Expo 57** with React Native 0.86
-- **Expo Router 57** for file-based routing
+- **Expo 58** with React Native 0.88
+- **Expo Router 58** for file-based routing
 - **TanStack Query 5** for server state (+ offline persistence)
 - **NativeWind 4** for Tailwind CSS styling
 - **Supabase** (`@supabase/supabase-js`) for data and auth — served by tinbase in the RapidNative editor and by `npx tinbase@0.11.1 start` or a real Supabase project elsewhere; the same code runs against all of them

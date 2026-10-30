@@ -11,7 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const isPreview =
   process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'designer' ||
-  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'staging'
+  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'staging' ||
+  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'preview'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query Client

@@ -35,7 +35,8 @@ function RootLayoutNav() {
 // Exported apps and production builds run in neither mode.
 const isPreview =
   process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'designer' ||
-  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'staging';
+  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'staging' ||
+  process.env.EXPO_PUBLIC_RAPIDNATIVE_MODE === 'preview';
 
 function QueryProvider({ children }: { children: ReactNode }) {
   if (isPreview) {

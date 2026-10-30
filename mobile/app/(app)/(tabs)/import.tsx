@@ -23,9 +23,9 @@ cssInterop(FileSpreadsheetIcon, { className: { target: 'style', nativeStyleToPro
 cssInterop(PlusIcon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(Trash2Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
-type Row = { salutation: string; first_name: string; last_name: string; country_code: string; phone: string; nationality: string; handling_staff: string };
+type Row = { salutation: string; first_name: string; last_name: string; country_code: string; phone: string; nationality: string; handling_staff: string; introducer_name: string; introducer_phone: string };
 
-const EMPTY_ROW: Row = { salutation: '', first_name: '', last_name: '', country_code: '+44', phone: '', nationality: '', handling_staff: '' };
+const EMPTY_ROW: Row = { salutation: '', first_name: '', last_name: '', country_code: '+44', phone: '', nationality: '', handling_staff: '', introducer_name: '', introducer_phone: '' };
 
 export default function ImportScreen() {
   const { client } = useApp();
@@ -55,7 +55,7 @@ export default function ImportScreen() {
       // Skip header-like lines (e.g. "First name, Last name, ...")
       if (/first\s*name/i.test(line) && /last\s*name/i.test(line)) continue;
       const cols = line.includes('\t') ? line.split('\t') : line.split(',');
-      const [a = '', b = '', c = '', d = '', e = '', f = ''] = cols.map((c) => c.trim());
+      const [a = '', b = '', c = '', d = '', e = '', f = '', g = '', h = ''] = cols.map((c) => c.trim());
       // Detect header order if the first column is "Mr/Ms", otherwise assume salutation first.
       const salutation = a || '';
       const first_name = b || '';
@@ -63,8 +63,10 @@ export default function ImportScreen() {
       const phone = d || '';
       const nationality = e || '';
       const handling_staff = f || staffDisplayName;
+      const introducer_name = g || '';
+      const introducer_phone = h || '';
       if (!first_name && !last_name && !phone) continue;
-      parsed.push({ salutation, first_name, last_name, country_code: '+44', phone, nationality, handling_staff });
+      parsed.push({ salutation, first_name, last_name, country_code: '+44', phone, nationality, handling_staff, introducer_name, introducer_phone });
     }
 
     if (parsed.length === 0) {
@@ -106,6 +108,8 @@ export default function ImportScreen() {
           nationality: r.nationality.trim() || null,
           handling_staff: ownName || r.handling_staff.trim() || 'Unassigned',
           staff_user_id: ownId,
+          introducer_name: r.introducer_name.trim() || null,
+          introducer_phone: r.introducer_phone.trim() || null,
           status: 'awaiting_input',
           follow_up_due: false,
         }));
@@ -150,14 +154,14 @@ export default function ImportScreen() {
               <View className="flex-1 min-w-0">
                 <Text className="text-base font-semibold text-foreground">Paste Excel / CSV rows</Text>
                 <Text className="mt-0.5 text-xs text-muted-foreground">
-                  Columns: Mr/Ms, First name, Last name, Phone, Nationality, Handling Staff
+                  Columns: Mr/Ms, First name, Last name, Phone, Nationality, Handling Staff, Introducer Name, Introducer Phone
                 </Text>
               </View>
             </View>
             <TextInput
               className="mt-3 min-h-[120px] bg-background rounded-xl px-3 py-3 border border-border text-foreground text-left"
               style={{ textAlignVertical: 'top' }}
-              placeholder={`Example:\nMr, John, Smith, +1 555 0100, USA, ${staffDisplayName}\nMs, Alice, Doe, +1 555 0101, UK, ${staffDisplayName}`}
+              placeholder={`Example:\nMr, John, Smith, +1 555 0100, USA, ${staffDisplayName}, Alice Wong, +852 9123 4567\nMs, Alice, Doe, +1 555 0101, UK, ${staffDisplayName}, Bob Chan, +852 9111 2222`}
               placeholderTextColor="#8d9d9e"
               multiline
               value={pasteText}
@@ -241,6 +245,21 @@ export default function ImportScreen() {
                     placeholderTextColor="#8d9d9e"
                     value={r.handling_staff}
                     onChangeText={(v) => setRow(i, 'handling_staff', v)}
+                  />
+                  <TextInput
+                    className="bg-background rounded-xl px-3 py-3 border border-border text-foreground"
+                    placeholder="Introducer name"
+                    placeholderTextColor="#8d9d9e"
+                    value={r.introducer_name}
+                    onChangeText={(v) => setRow(i, 'introducer_name', v)}
+                  />
+                  <TextInput
+                    className="bg-background rounded-xl px-3 py-3 border border-border text-foreground"
+                    placeholder="Introducer phone (WhatsApp)"
+                    placeholderTextColor="#8d9d9e"
+                    keyboardType="phone-pad"
+                    value={r.introducer_phone}
+                    onChangeText={(v) => setRow(i, 'introducer_phone', v)}
                   />
                 </View>
               </View>

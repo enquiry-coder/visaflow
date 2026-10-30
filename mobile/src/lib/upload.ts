@@ -77,7 +77,7 @@ async function uriToBlob(uri: string): Promise<Blob> {
   }
 
   // Native: expo-file-system can read a file:// source to base64, then build a Blob.
-  const FileSystem = await import('expo-file-system');
+  const FileSystem = await import('expo-file-system/legacy');
   const base64 = await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });

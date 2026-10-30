@@ -48,6 +48,8 @@ export interface Database {
           last_reminder_at: string | null;
           face_match: string | null;
           face_match_at: string | null;
+          introducer_name: string | null;
+          introducer_phone: string | null;
         };
         Insert: {
           id: string;
@@ -86,6 +88,8 @@ export interface Database {
           last_reminder_at?: string | null;
           face_match?: string | null;
           face_match_at?: string | null;
+          introducer_name?: string | null;
+          introducer_phone?: string | null;
         };
         Update: {
           id?: string;
@@ -124,7 +128,10 @@ export interface Database {
           last_reminder_at?: string | null;
           face_match?: string | null;
           face_match_at?: string | null;
+          introducer_name?: string | null;
+          introducer_phone?: string | null;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

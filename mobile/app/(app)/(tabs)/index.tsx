@@ -119,8 +119,8 @@ export default function PipelineScreen() {
       const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
       const staffName = userFullName || 'our team';
       const msg = c.kind === 'reminder'
-        ? `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker. If you have not responded to our earlier message, please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`
-        : `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Broker regarding your application by Trust (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
+        ? `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Brokers. If you have not responded to our earlier message, please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`
+        : `Hi ${salutation}${fullName}, this is ${staffName} of Grandtag Insurance Brokers (${c.reg_no}). Please use this quick link to select your preferred Zoom interview time and attach your Passport & Address Proof: ${portalUrl}`;
       // Open WhatsApp (native app on mobile, wa.me in a new tab on web) with the message pre-filled.
       const phone = (c.phone || '').replace(/\D/g, '');
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;

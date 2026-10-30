@@ -3,7 +3,7 @@
 Base template for RapidNative fullstack projects — a monorepo with an Expo app, a SQL database, and companion API/web workspaces.
 
 ```
-├── mobile/            # Expo 57 + React Native 0.86 (primary workspace)
+├── mobile/            # Expo 58 + React Native 0.88 (primary workspace)
 ├── supabase/          # SQL migrations + seed — the schema's source of truth
 ├── api/               # Express.js API server
 ├── web/               # Static HTML web app
@@ -12,7 +12,7 @@ Base template for RapidNative fullstack projects — a monorepo with an Expo app
 
 ## Workspaces
 
-- **mobile/** — Primary workspace. Expo Router 57 for navigation, NativeWind 4 for styling, TanStack Query 5 for data fetching, and `@supabase/supabase-js` for data and auth. See `mobile/README.md`.
+- **mobile/** — Primary workspace. Expo Router 58 for navigation, NativeWind 4 for styling, TanStack Query 5 for data fetching, and `@supabase/supabase-js` for data and auth. See `mobile/README.md`.
 - **supabase/** — The database. `migrations/*.sql` define the schema (Supabase CLI conventions, timestamped filenames); `seed.sql` inserts demo rows. At the repo root, not inside mobile/, because the database belongs to the project — all workspaces reach it and the Supabase CLI expects it here.
 - **api/** — Minimal Express server with a health check endpoint. Add custom API routes here.
 - **web/** — Static HTML placeholder for companion web pages.

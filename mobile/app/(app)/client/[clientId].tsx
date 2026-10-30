@@ -146,7 +146,7 @@ function printReport(c: any, docsClear: boolean, allStepsComplete: boolean): voi
     </div>
   </div>
 
-  <div class="foot">Generated ${hk(new Date().toISOString())} · Grandtag Insurance Broker</div>
+  <div class="foot">Generated ${hk(new Date().toISOString())} · Grandtag Insurance Brokers</div>
 </body></html>`;
 
   w.document.write(html);
@@ -163,6 +163,8 @@ export default function ClientDetailScreen() {
   const [zoomLink, setZoomLink] = useState('');
   const [salutation, setSalutation] = useState('');
   const [nationality, setNationality] = useState('');
+  const [introducerName, setIntroducerName] = useState('');
+  const [introducerPhone, setIntroducerPhone] = useState('');
   const [confirmedTime, setConfirmedTime] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -382,6 +384,44 @@ export default function ClientDetailScreen() {
     setNotice('Profile updated');
   };
 
+  // Persist the introducer's name + WhatsApp number on the client record.
+  const saveIntroducer = () => {
+    if (!c) return;
+    update.mutate({ introducer_name: introducerName.trim() || null, introducer_phone: introducerPhone.trim() || null });
+    setNotice('Introducer saved');
+  };
+
+  // Open wa.me to the introducer with a pre-filled standard status message. The
+  // staff taps the button to send it (WhatsApp has no silent-send), matching the
+  // existing client invite/reminder flow.
+  const sendIntroducerMessage = async (kind: 'invited' | 'confirmed' | 'completed') => {
+    if (!c) return;
+    const phone = ((c.introducer_phone || introducerPhone) || '').replace(/\D/g, '');
+    if (!phone) {
+      setError('Save the introducer phone number first');
+      return;
+    }
+    const sal = c.salutation ? `${c.salutation} ` : '';
+    const fullName = `${c.first_name}${c.last_name ? ' ' + c.last_name : ''}`;
+    let msg = '';
+    if (kind === 'invited') {
+      msg = `A client you introduced, ${sal}${fullName}, has been invited for their ID verification interview.`;
+    } else if (kind === 'confirmed') {
+      const when = (c.confirmed_date ?? c.preferred_date ?? '') && (c.confirmed_time || c.preferred_time)
+        ? `${c.confirmed_date ?? c.preferred_date} at ${c.confirmed_time || c.preferred_time} (Hong Kong time)`
+        : 'a confirmed time';
+      msg = `Interview confirmed: ${sal}${fullName} — ${when}.`;
+    } else {
+      msg = `Good news: ${sal}${fullName} has passed the interview and their case is now complete.`;
+    }
+    try {
+      await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+      setNotice(kind === 'invited' ? 'Introducer notified of client invited' : kind === 'confirmed' ? 'Introducer notified of interview confirmed' : 'Introducer notified of completion');
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not open WhatsApp');
+    }
+  };
+
   // Record the staff's affirmative "does the live client match the passport photo?"
   // decision as proof-of-work. yes/no + timestamp are persisted so the ID check is
   // auditable evidence, not just an unrecorded human judgment.
@@ -506,6 +546,44 @@ export default function ClientDetailScreen() {
           <Pressable onPress={saveProfile} className="mt-3 items-center rounded-xl bg-muted py-2.5 active:scale-[0.97]">
             <Text className="text-sm font-semibold text-foreground">Save profile</Text>
           </Pressable>
+        </Section>
+
+        {/* Introducer */}
+        <Section icon={<UserCheckIcon className="text-muted-foreground" size={16} />} title="Introducer">
+          <View className="mt-2 gap-2">
+            <TextInput
+              className="bg-background rounded-xl px-3 py-3 border border-border text-foreground"
+              placeholder="Introducer name"
+              placeholderTextColor="#8d9d9e"
+              value={introducerName || c.introducer_name || ''}
+              onChangeText={setIntroducerName}
+            />
+            <TextInput
+              className="bg-background rounded-xl px-3 py-3 border border-border text-foreground"
+              placeholder="Introducer phone (WhatsApp)"
+              placeholderTextColor="#8d9d9e"
+              keyboardType="phone-pad"
+              value={introducerPhone || c.introducer_phone || ''}
+              onChangeText={setIntroducerPhone}
+            />
+            <Pressable onPress={saveIntroducer} className="items-center rounded-xl bg-muted py-2.5 active:scale-[0.97]">
+              <Text className="text-sm font-semibold text-foreground">Save introducer</Text>
+            </Pressable>
+          </View>
+          <View className="mt-3 gap-2">
+            <Pressable onPress={() => sendIntroducerMessage('invited')} className="flex-row items-center justify-center gap-2 rounded-xl bg-secondary py-3 active:scale-[0.98]">
+              <MessageCircleIcon className="text-secondary-foreground" size={16} />
+              <Text className="text-sm font-semibold text-secondary-foreground">Notify introducer — client invited</Text>
+            </Pressable>
+            <Pressable onPress={() => sendIntroducerMessage('confirmed')} className="flex-row items-center justify-center gap-2 rounded-xl bg-secondary py-3 active:scale-[0.98]">
+              <MessageCircleIcon className="text-secondary-foreground" size={16} />
+              <Text className="text-sm font-semibold text-secondary-foreground">Notify introducer — interview confirmed</Text>
+            </Pressable>
+            <Pressable onPress={() => sendIntroducerMessage('completed')} className="flex-row items-center justify-center gap-2 rounded-xl bg-secondary py-3 active:scale-[0.98]">
+              <MessageCircleIcon className="text-secondary-foreground" size={16} />
+              <Text className="text-sm font-semibold text-secondary-foreground">Notify introducer — interview passed & complete</Text>
+            </Pressable>
+          </View>
         </Section>
 
         {/* Appointment */}
